@@ -2,6 +2,7 @@
 from pathlib import Path
 
 TOOLBAR = Path("src/OpenLoco/src/Ui/Windows/ToolbarTop.cpp")
+COMPANY_MANAGER = Path("src/OpenLoco/src/World/CompanyManager.cpp")
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -11,7 +12,7 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-def main() -> None:
+def patch_toolbar() -> None:
     text = TOOLBAR.read_text(encoding="utf-8")
 
     include_old = '#include "GameState.h"\n'
@@ -34,7 +35,30 @@ def main() -> None:
         text = replace_once(text, old_dropdown, new_dropdown, "townsMenuDropdown")
 
     TOOLBAR.write_text(text, encoding="utf-8", newline="\n")
-    print("Hybrid v0.3 toolbar integration applied successfully.")
+
+
+def patch_company_manager() -> None:
+    text = COMPANY_MANAGER.read_text(encoding="utf-8")
+
+    include_old = '#include "GameState.h"\n'
+    include_new = '#include "GameState.h"\n#include "Hybrid/ParkManager.h"\n'
+    if '#include "Hybrid/ParkManager.h"' not in text:
+        text = replace_once(text, include_old, include_new, "CompanyManager GameState include")
+
+    old_monthly = '''        for (auto& company : companies())\n        {\n            company.updateMonthly1();\n        }\n        Ui::WindowManager::invalidate(Ui::WindowType::company);\n'''
+
+    new_monthly = '''        for (auto& company : companies())\n        {\n            company.updateMonthly1();\n        }\n\n        OpenLoco::Hybrid::Parks::updateMonthly();\n\n        Ui::WindowManager::invalidate(Ui::WindowType::company);\n'''
+
+    if 'OpenLoco::Hybrid::Parks::updateMonthly();' not in text:
+        text = replace_once(text, old_monthly, new_monthly, "CompanyManager monthly update")
+
+    COMPANY_MANAGER.write_text(text, encoding="utf-8", newline="\n")
+
+
+def main() -> None:
+    patch_toolbar()
+    patch_company_manager()
+    print("Hybrid v0.3.1 regional UI + park economy integration applied successfully.")
 
 
 if __name__ == "__main__":
