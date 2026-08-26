@@ -1,15 +1,13 @@
 #pragma once
 
 #include "Economy/Expenditures.h"
+#include "Hybrid/Rct2AssetRegistry.h"
 #include "Map/TileManager.h"
 #include "SceneManager.h"
 #include "World/CompanyManager.h"
 #include "World/TownManager.h"
-#include <OpenLoco/Core/FileSystem.hpp>
-#include <OpenLoco/Platform/Platform.h>
 
 #include <algorithm>
-#include <cctype>
 #include <cstdint>
 #include <cstdlib>
 #include <string>
@@ -18,15 +16,10 @@
 
 namespace OpenLoco::Hybrid::Parks
 {
-    enum class AttractionType : uint8_t
-    {
-        carousel,
-        ferrisWheel,
-        compactCoaster,
-        foodStall,
-    };
-
-    constexpr currency32_t kParkConstructionCost = 75000;
+    // v0.4 alpha deliberately uses a low construction charge so a fresh test
+    // scenario can exercise the complete park flow without taking a large loan.
+    // The final balance model will derive land price from the site and era.
+    constexpr currency32_t kParkConstructionCost = 5000;
     constexpr int16_t kTileWorldSize = 32;
     constexpr int16_t kParkFootprintTiles = 7;
     constexpr int16_t kParkFootprintRadius = kParkFootprintTiles / 2;
@@ -38,17 +31,12 @@ namespace OpenLoco::Hybrid::Parks
         World::Pos2 position{}; // centre tile of the regional 7x7 site
         CompanyId owner{ CompanyId::null };
         uint16_t closestTownId{ 0xFFFF };
-
         bool open{ true };
+        bool detailedParkLaunched{};
+
         uint16_t popularity{ 550 };
         uint16_t capacity{ 250 };
         currency32_t ticketPrice{ 20 };
-
-        uint16_t carouselCount{};
-        uint16_t ferrisWheelCount{};
-        uint16_t coasterCount{};
-        uint16_t foodStallCount{};
-
         uint32_t visitorsLastMonth{};
         uint64_t lifetimeVisitors{};
         currency32_t lastRevenue{};
@@ -62,62 +50,19 @@ namespace OpenLoco::Hybrid::Parks
     inline uint16_t _selectedParkId{};
     inline std::string _lastStatus{ "Hybrid park system ready." };
 
-    inline fs::path getRct2AssetsRoot()
-    {
-        return Platform::getCurrentExecutablePath().parent_path() / "RCT2";
-    }
-
-    inline bool hasRct2ObjectData(const fs::path& objDataPath)
-    {
-        try
-        {
-            if (!fs::is_directory(objDataPath))
-            {
-                return false;
-            }
-
-            for (const auto& entry : fs::directory_iterator(objDataPath))
-            {
-                if (!entry.is_regular_file())
-                {
-                    continue;
-                }
-
-                auto extension = entry.path().extension().string();
-                std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-                if (extension == ".dat")
-                {
-                    return true;
-                }
-            }
-        }
-        catch (const std::exception&)
-        {
-            return false;
-        }
-        return false;
-    }
-
     inline bool hasRct2Assets()
     {
-        try
-        {
-            const auto root = getRct2AssetsRoot();
-            const auto g1 = root / "Data" / "g1.dat";
-            if (!fs::is_regular_file(g1) || fs::file_size(g1) < 1024 * 1024)
-            {
-                return false;
-            }
-            return hasRct2ObjectData(root / "ObjData");
-        }
-        catch (const std::exception&)
-        {
-            return false;
-        }
+        return Rct2Assets::ready();
     }
 
-    inline std::pair<World::Pos2, World::Pos2> footprintBounds(const World::Pos2& centre)
+    inline World::Pos2 normaliseCentre(const World::Pos2& position)
     {
+        return World::toWorldSpace(World::toTileSpace(position));
+    }
+
+    inline std::pair<World::Pos2, World::Pos2> footprintBounds(const World::Pos2& position)
+    {
+        const auto centre = normaliseCentre(position);
         constexpr int16_t radiusWorld = kParkFootprintRadius * kTileWorldSize;
         return {
             World::Pos2{ static_cast<coord_t>(centre.x - radiusWorld), static_cast<coord_t>(centre.y - radiusWorld) },
@@ -132,20 +77,9 @@ namespace OpenLoco::Hybrid::Parks
         return !(aMax.x < bMin.x || bMax.x < aMin.x || aMax.y < bMin.y || bMax.y < aMin.y);
     }
 
-    inline uint16_t attractionCount(const Park& park)
-    {
-        return park.carouselCount + park.ferrisWheelCount + park.coasterCount;
-    }
-
     inline Park* getPark(uint16_t id)
     {
-        auto it = std::find_if(_parks.begin(), _parks.end(), [id](const Park& p) { return p.id == id; });
-        return it == _parks.end() ? nullptr : &*it;
-    }
-
-    inline const Park* getPark(uint16_t id, int)
-    {
-        auto it = std::find_if(_parks.begin(), _parks.end(), [id](const Park& p) { return p.id == id; });
+        const auto it = std::find_if(_parks.begin(), _parks.end(), [id](const Park& p) { return p.id == id; });
         return it == _parks.end() ? nullptr : &*it;
     }
 
@@ -167,26 +101,22 @@ namespace OpenLoco::Hybrid::Parks
     inline void refreshClosestTown(Park& park)
     {
         const auto result = TownManager::getClosestTownAndDensity(park.position);
-        if (!result.has_value())
-        {
-            park.closestTownId = 0xFFFF;
-            return;
-        }
-        park.closestTownId = enumValue(result->first);
+        park.closestTownId = result.has_value() ? enumValue(result->first) : 0xFFFF;
     }
 
-    inline bool validateParkSite(const World::Pos2& centre, std::string& reason)
+    inline bool validateParkSite(const World::Pos2& inputPosition, std::string& reason)
     {
-        if (!hasRct2Assets())
+        if (!Rct2Assets::ready())
         {
-            reason = "RCT2 assets missing. Put Data/g1.dat and ObjData inside the RCT2 folder beside OpenLoco.exe.";
+            reason = Rct2Assets::get().status;
             return false;
         }
 
+        const auto centre = normaliseCentre(inputPosition);
         const auto closest = TownManager::getClosestTownAndDensity(centre);
         if (!closest.has_value())
         {
-            reason = "A park must be built near an existing town.";
+            reason = "A regional park must be built near an existing town.";
             return false;
         }
 
@@ -197,11 +127,11 @@ namespace OpenLoco::Hybrid::Parks
             return false;
         }
 
-        const auto distanceWorld = std::abs(static_cast<int32_t>(town->x) - centre.x) + std::abs(static_cast<int32_t>(town->y) - centre.y);
-        const auto distanceTiles = distanceWorld / kTileWorldSize;
-        if (distanceTiles > kMaxTownDistanceTiles)
+        const auto distanceWorld = std::abs(static_cast<int32_t>(town->x) - centre.x)
+            + std::abs(static_cast<int32_t>(town->y) - centre.y);
+        if ((distanceWorld / kTileWorldSize) > kMaxTownDistanceTiles)
         {
-            reason = "This site is too far from a town. Regional parks must be within 48 tiles of a town centre.";
+            reason = "Park site rejected: it must be within 48 tiles of a town centre.";
             return false;
         }
 
@@ -209,7 +139,7 @@ namespace OpenLoco::Hybrid::Parks
         {
             if (footprintsOverlap(existing.position, centre))
             {
-                reason = "This 7x7 park site overlaps another park.";
+                reason = "Park site rejected: the 7x7 area overlaps another Hybrid park.";
                 return false;
             }
         }
@@ -225,7 +155,7 @@ namespace OpenLoco::Hybrid::Parks
                 const auto tilePos = World::toTileSpace(worldPos);
                 if (!World::validCoords(tilePos))
                 {
-                    reason = "The full 7x7 park footprint must fit inside the map.";
+                    reason = "Park site rejected: the full 7x7 footprint must fit inside the map.";
                     return false;
                 }
 
@@ -233,7 +163,21 @@ namespace OpenLoco::Hybrid::Parks
                 const auto* surface = tile.surface();
                 if (surface == nullptr || surface->water())
                 {
-                    reason = "The regional 7x7 park footprint must be entirely on land.";
+                    reason = "Park site rejected: all 49 tiles must be dry land.";
+                    return false;
+                }
+
+                // For this alpha, do not silently bulldoze roads, rails, stations,
+                // buildings, industries or scenery. A park site must be completely
+                // clear. Later builds can offer an explicit clearance cost preview.
+                size_t elementCount = 0;
+                for ([[maybe_unused]] const auto& element : tile)
+                {
+                    ++elementCount;
+                }
+                if (elementCount > 1)
+                {
+                    reason = "Park site rejected: the highlighted 7x7 area must be clear of roads, tracks, buildings and scenery.";
                     return false;
                 }
             }
@@ -241,37 +185,6 @@ namespace OpenLoco::Hybrid::Parks
 
         reason.clear();
         return true;
-    }
-
-    inline uint32_t estimateMonthlyVisitors(const Park& park)
-    {
-        if (!park.open || attractionCount(park) == 0)
-        {
-            return 0;
-        }
-
-        const uint64_t population = closestTownPopulation(park);
-        if (population == 0)
-        {
-            return 0;
-        }
-
-        // Regional alpha model: attractions create potential demand, while
-        // popularity, admission price and capacity determine how much of that
-        // demand converts into actual attendance. Real transport accessibility
-        // will become another multiplier in the next integration layer.
-        const uint32_t attractionScore = std::min<uint32_t>(42, 4 + attractionCount(park) * 6 + park.foodStallCount * 2);
-        uint64_t visitors = population * attractionScore / 100;
-        visitors = visitors * park.popularity / 1000;
-
-        // Admission elasticity. 20 is the neutral/default ticket. Cheaper
-        // admission can raise attendance by up to 20%; expensive admission
-        // progressively suppresses demand, down to 25% at the extreme.
-        const int32_t priceDemandPercent = std::clamp<int32_t>(120 - park.ticketPrice, 25, 120);
-        visitors = visitors * priceDemandPercent / 100;
-
-        const uint64_t monthlyCapacity = static_cast<uint64_t>(park.capacity) * 30;
-        return static_cast<uint32_t>(std::min<uint64_t>(visitors, monthlyCapacity));
     }
 
     inline bool pay(CompanyId owner, currency32_t amount, ExpenditureType type, const World::Pos2& position)
@@ -282,7 +195,7 @@ namespace OpenLoco::Hybrid::Parks
         }
         if (!CompanyManager::ensureCompanyFunding(owner, amount))
         {
-            _lastStatus = "Not enough company funds for this park investment.";
+            _lastStatus = "Not enough company funds. Hybrid alpha park construction costs 5,000.";
             return false;
         }
 
@@ -291,8 +204,9 @@ namespace OpenLoco::Hybrid::Parks
         return true;
     }
 
-    inline Park* createPark(const World::Pos2& position)
+    inline Park* createPark(const World::Pos2& inputPosition)
     {
+        const auto position = normaliseCentre(inputPosition);
         std::string siteError;
         if (!validateParkSite(position, siteError))
         {
@@ -319,83 +233,29 @@ namespace OpenLoco::Hybrid::Parks
 
         _parks.push_back(park);
         _selectedParkId = park.id;
-        _lastStatus = "Regional park site created: 7x7 tiles reserved around the selected centre.";
+        _lastStatus = "Regional park created. Use ENTER PARK to open the real RCT2 detailed park layer.";
         return &_parks.back();
     }
 
-    inline currency32_t attractionBuildCost(AttractionType type)
+    inline uint32_t estimateMonthlyVisitors(const Park& park)
     {
-        switch (type)
+        if (!park.open || !park.detailedParkLaunched)
         {
-            case AttractionType::carousel:
-                return 8000;
-            case AttractionType::ferrisWheel:
-                return 15000;
-            case AttractionType::compactCoaster:
-                return 35000;
-            case AttractionType::foodStall:
-                return 5000;
+            return 0;
         }
-        return 0;
-    }
-
-    inline const char* attractionName(AttractionType type)
-    {
-        switch (type)
+        const uint64_t population = closestTownPopulation(park);
+        if (population == 0)
         {
-            case AttractionType::carousel:
-                return "Carousel";
-            case AttractionType::ferrisWheel:
-                return "Ferris Wheel";
-            case AttractionType::compactCoaster:
-                return "Compact Coaster";
-            case AttractionType::foodStall:
-                return "Food Stall";
-        }
-        return "Attraction";
-    }
-
-    inline bool buildAttraction(Park& park, AttractionType type)
-    {
-        const auto cost = attractionBuildCost(type);
-        if (!pay(park.owner, cost, ExpenditureType::Construction, park.position))
-        {
-            return false;
+            return 0;
         }
 
-        switch (type)
-        {
-            case AttractionType::carousel:
-                park.carouselCount++;
-                park.capacity += 180;
-                park.popularity = std::min<uint16_t>(1000, park.popularity + 35);
-                break;
-            case AttractionType::ferrisWheel:
-                park.ferrisWheelCount++;
-                park.capacity += 260;
-                park.popularity = std::min<uint16_t>(1000, park.popularity + 50);
-                break;
-            case AttractionType::compactCoaster:
-                park.coasterCount++;
-                park.capacity += 520;
-                park.popularity = std::min<uint16_t>(1000, park.popularity + 85);
-                break;
-            case AttractionType::foodStall:
-                park.foodStallCount++;
-                park.capacity += 40;
-                park.popularity = std::min<uint16_t>(1000, park.popularity + 15);
-                break;
-        }
-
-        _lastStatus = std::string(attractionName(type)) + " built successfully.";
-        return true;
-    }
-
-    inline void adjustTicketPrice(Park& park, int delta)
-    {
-        const int32_t next = std::clamp<int32_t>(park.ticketPrice + delta, 0, 100);
-        park.ticketPrice = next;
-        _lastStatus = "Park ticket price updated; projected demand now reflects the new admission price.";
+        // Temporary regional placeholder until OpenRCT2 park statistics are
+        // synchronised back through the Hybrid sidecar bridge.
+        uint64_t visitors = population * 4 / 100;
+        visitors = visitors * park.popularity / 1000;
+        const int32_t priceDemandPercent = std::clamp<int32_t>(120 - park.ticketPrice, 25, 120);
+        visitors = visitors * priceDemandPercent / 100;
+        return static_cast<uint32_t>(std::min<uint64_t>(visitors, static_cast<uint64_t>(park.capacity) * 30));
     }
 
     inline void updateMonthly()
@@ -407,7 +267,7 @@ namespace OpenLoco::Hybrid::Parks
 
         for (auto& park : _parks)
         {
-            if (!park.open)
+            if (!park.open || !park.detailedParkLaunched)
             {
                 continue;
             }
@@ -417,40 +277,11 @@ namespace OpenLoco::Hybrid::Parks
             park.visitorsLastMonth = visitors;
             park.lifetimeVisitors += visitors;
 
-            const auto internalSpend = static_cast<currency32_t>(visitors * (2 + park.foodStallCount * 2));
-            park.lastRevenue = static_cast<currency32_t>(visitors) * park.ticketPrice + internalSpend;
-            park.lastTax = static_cast<currency32_t>(900 + park.capacity / 8 + attractionCount(park) * 250 + park.foodStallCount * 100);
-            park.lastOperatingCost = static_cast<currency32_t>(1800 + attractionCount(park) * 900 + park.foodStallCount * 400 + visitors);
+            park.lastRevenue = static_cast<currency32_t>(visitors) * park.ticketPrice;
+            park.lastTax = static_cast<currency32_t>(500 + park.capacity / 10);
+            park.lastOperatingCost = static_cast<currency32_t>(900 + visitors);
             park.lastProfit = park.lastRevenue - park.lastTax - park.lastOperatingCost;
-
-            // Preserve the vanilla SV5 expenditure layout: park construction is
-            // recorded as Construction, while the monthly net operating result
-            // is booked under Miscellaneous. The Hybrid finance page keeps the
-            // detailed tax / maintenance / revenue breakdown.
             CompanyManager::applyPaymentToCompany(park.owner, -park.lastProfit, ExpenditureType::Miscellaneous);
-
-            if (auto* town = park.closestTownId == 0xFFFF ? nullptr : TownManager::get(TownId(park.closestTownId)); town != nullptr)
-            {
-                if (park.popularity >= 750)
-                {
-                    town->adjustCompanyRating(park.owner, 2);
-                }
-                else if (park.popularity <= 350)
-                {
-                    town->adjustCompanyRating(park.owner, -2);
-                }
-            }
-
-            if (park.lastProfit > 0)
-            {
-                park.popularity = std::min<uint16_t>(1000, park.popularity + 4);
-            }
-            else if (park.popularity > 100)
-            {
-                park.popularity = std::max<uint16_t>(100, park.popularity - 6);
-            }
         }
-
-        _lastStatus = "Monthly park finances processed and posted to the company.";
     }
 }
