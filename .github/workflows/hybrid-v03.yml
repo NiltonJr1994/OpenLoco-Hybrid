@@ -20,6 +20,28 @@ jobs:
           fetch-depth: 0
           submodules: true
 
+      - name: Setup cache env vars
+        shell: pwsh
+        run: |
+          echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/vcpkg-cache" | Out-File -FilePath $env:GITHUB_ENV -Append
+          New-Item -ItemType Directory -Force "${{ github.workspace }}/vcpkg-cache" | Out-Null
+
+      - name: Get vcpkg baseline
+        id: vcpkg_baseline
+        shell: bash
+        run: |
+          sha=$(sed -n 's/^set(VCPKG_GIT_TAG[[:space:]]*\([0-9a-f]*\)).*/\1/p' CMakeLists.txt)
+          test -n "$sha" || { echo "VCPKG_GIT_TAG not found in CMakeLists.txt" >&2; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: windows-2022-64-vcpkg-${{ steps.vcpkg_baseline.outputs.sha }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            windows-2022-64-vcpkg-${{ steps.vcpkg_baseline.outputs.sha }}-
+
       - name: Apply Hybrid map integration
         shell: pwsh
         run: python tools/hybrid/apply_v03.py
@@ -31,6 +53,13 @@ jobs:
       - name: Build
         shell: cmd
         run: cmake --build --preset windows-release
+
+      - name: Save vcpkg binary cache
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: windows-2022-64-vcpkg-${{ steps.vcpkg_baseline.outputs.sha }}-${{ hashFiles('vcpkg.json') }}-${{ hashFiles('vcpkg-cache/**') }}
 
       - name: Package test build
         shell: pwsh
