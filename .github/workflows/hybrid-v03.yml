@@ -1,0 +1,209 @@
+name: Hybrid v0.4 Windows test build
+
+on:
+  push:
+    branches:
+      - hybrid/v0.3-map-integration
+  workflow_dispatch:
+
+jobs:
+  windows-x64:
+    name: Hybrid Windows x64
+    runs-on: windows-2022
+    env:
+      CONFIGURATION: Release
+      POWERSHELL_TELEMETRY_OPTOUT: 1
+      OPENRCT2_VERSION: v0.5.3
+      OPENRCT2_SHA256: d67814e13c12e622d4570b9a8b4a417da5b002729f9f851e80d0562b781c80ab
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Setup cache env vars
+        shell: pwsh
+        run: |
+          echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/vcpkg-cache" | Out-File -FilePath $env:GITHUB_ENV -Append
+          New-Item -ItemType Directory -Force "${{ github.workspace }}/vcpkg-cache" | Out-Null
+
+      - name: Get vcpkg baseline
+        id: vcpkg_baseline
+        shell: bash
+        run: |
+          sha=$(sed -n 's/^set(VCPKG_GIT_TAG[[:space:]]*\([0-9a-f]*\)).*/\1/p' CMakeLists.txt)
+          test -n "$sha" || { echo "VCPKG_GIT_TAG not found in CMakeLists.txt" >&2; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: windows-2022-64-vcpkg-${{ steps.vcpkg_baseline.outputs.sha }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            windows-2022-64-vcpkg-${{ steps.vcpkg_baseline.outputs.sha }}-
+
+      - name: Apply Hybrid engine hooks
+        shell: pwsh
+        run: python tools/hybrid/apply_v03.py
+
+      - name: Configure
+        shell: cmd
+        run: cmake --preset windows
+
+      - name: Build
+        shell: cmd
+        run: cmake --build --preset windows-release
+
+      - name: Verify Hybrid binary markers
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          exe = Path(r"build/windows/Release/OpenLoco.exe")
+          if not exe.exists():
+              raise SystemExit("OpenLoco.exe was not produced")
+          data = exe.read_bytes()
+          markers = [
+              b"Parks (Hybrid)",
+              b"v0.4.0-alpha",
+              b"RCT2 bridge diagnostics",
+              b"Build park",
+              b"Enter park",
+              b"Track designs (.TD6)",
+              b"OpenRCT2 runtime",
+          ]
+          for marker in markers:
+              if marker not in data:
+                  raise SystemExit(f"Missing Hybrid marker: {marker!r}")
+          print(f"Verified Hybrid executable: {exe.stat().st_size} bytes")
+          '@ | python -
+
+      - name: Download pinned OpenRCT2 runtime
+        shell: pwsh
+        run: |
+          $asset = "OpenRCT2-$env:OPENRCT2_VERSION-windows-portable-x64.zip"
+          $url = "https://github.com/OpenRCT2/OpenRCT2/releases/download/$env:OPENRCT2_VERSION/$asset"
+          Invoke-WebRequest -Uri $url -OutFile openrct2-runtime.zip
+          $actual = (Get-FileHash openrct2-runtime.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $env:OPENRCT2_SHA256) {
+              throw "OpenRCT2 SHA-256 mismatch. Expected $env:OPENRCT2_SHA256, got $actual"
+          }
+          Expand-Archive openrct2-runtime.zip -DestinationPath openrct2-runtime-expanded -Force
+          $exe = Get-ChildItem openrct2-runtime-expanded -Recurse -Filter openrct2.exe | Select-Object -First 1
+          if ($null -eq $exe) { throw "openrct2.exe not found in the portable archive" }
+          $root = $exe.Directory.FullName
+          New-Item -ItemType Directory -Force staged-rct2-runtime | Out-Null
+          Copy-Item "$root\*" staged-rct2-runtime -Recurse -Force
+          if (-not (Test-Path staged-rct2-runtime\openrct2.exe)) { throw "staged OpenRCT2 runtime is incomplete" }
+          Write-Host "Pinned OpenRCT2 runtime verified: $actual"
+
+      - name: Save vcpkg binary cache
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: windows-2022-64-vcpkg-${{ steps.vcpkg_baseline.outputs.sha }}-${{ hashFiles('vcpkg.json') }}-${{ hashFiles('vcpkg-cache/**') }}
+
+      - name: Package test build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force hybrid-artifact | Out-Null
+          New-Item -ItemType Directory -Force hybrid-artifact\RCT2\Data | Out-Null
+          New-Item -ItemType Directory -Force hybrid-artifact\RCT2\ObjData | Out-Null
+          New-Item -ItemType Directory -Force hybrid-artifact\RCT2\Tracks | Out-Null
+          New-Item -ItemType Directory -Force hybrid-artifact\RCT2\Scenarios | Out-Null
+          New-Item -ItemType Directory -Force 'hybrid-artifact\RCT2\Saved Games' | Out-Null
+          New-Item -ItemType Directory -Force hybrid-artifact\rct2-runtime | Out-Null
+
+          Copy-Item CHANGELOG.md,CONTRIBUTORS.md,LICENSE hybrid-artifact
+          Copy-Item build\windows\Release\* hybrid-artifact -Recurse
+          Copy-Item staged-rct2-runtime\* hybrid-artifact\rct2-runtime -Recurse -Force
+
+          @"
+          OpenLoco Hybrid v0.4.0-alpha - Real RCT2 Asset Registry + Detailed Park Bridge
+
+          IMPORTANT
+          =========
+          Extract this ZIP to a new folder. Do not overwrite your normal OpenLoco installation.
+          This package contains OpenLoco Hybrid plus the separate GPL OpenRCT2 v0.5.3 runtime.
+          It DOES NOT contain copyrighted RollerCoaster Tycoon 2 game assets.
+
+          RCT2 SETUP
+          ==========
+          Copy the CONTENTS of your legitimate RCT2 installation into the included RCT2 folder.
+          The important directories are:
+              RCT2\Data\g1.dat
+              RCT2\ObjData\*.DAT
+              RCT2\Tracks\*.TD6
+              RCT2\Scenarios\*.SC6
+              RCT2\Saved Games\*.SV6   (optional)
+
+          Do not merge RCT2 ObjData into Locomotion ObjData.
+
+          EXPECTED INVENTORY FOR THE TEST PACKAGE PROVIDED BY THE TESTER
+          ==============================================================
+          Data files: 72
+          ObjData objects: 2122
+          Rides/shops: 267
+          Small scenery: 1117
+          Large scenery: 248
+          Walls: 313
+          Park entrances: 16
+          Track designs (.TD6): 204
+          Scenarios (.SC6): 57
+
+          TEST FLOW
+          =========
+          1. Start OpenLoco.exe and load/start a normal scenario.
+          2. Open Towns/Industries -> Parks (Hybrid).
+          3. The window must show the real RCT2 inventory above. Button labels must be native and visible.
+          4. Click BUILD PARK and choose a completely clear 7x7 land area within 48 tiles of a town centre.
+             Alpha construction charge is 5,000.
+          5. Invalid sites keep placement mode active and show the rejection reason in Status.
+          6. After a park is created, ENTER PARK becomes enabled.
+          7. Select the RCT2 scenario template with < Template / Template > if desired.
+          8. Click ENTER PARK. The bundled OpenRCT2 runtime must open the selected real .SC6 using:
+                 --rct2-data-path <Hybrid>\RCT2
+             This means OpenRCT2 reads the supplied RCT2 ObjData and the original Tracks folder.
+          9. Inside OpenRCT2, test normal RCT2 construction. Its track-design repository reads .TD6 directly from RCT2\Tracks.
+          10. Save the detailed park normally in OpenRCT2. Per-park OpenRCT2 user data is isolated under hybrid-data\parks\park-N.
+
+          CURRENT ALPHA BOUNDARY
+          ======================
+          The detailed park is now the real OpenRCT2 engine rather than a fake OpenLoco management window.
+          Synchronising detailed OpenRCT2 visitor/finance/ride statistics back into the regional OpenLoco simulation is the next bridge layer.
+          The OpenLoco regional park remains a 7x7 reserved entity and does not alter Locomotion vehicle DAT files.
+          "@ | Set-Content -Encoding UTF8 hybrid-artifact\HYBRID-TEST.txt
+
+          @"
+          Copy your own RollerCoaster Tycoon 2 installation into this RCT2 folder.
+
+          Required for Hybrid readiness:
+              Data\g1.dat
+              ObjData\*.DAT with ride and park-entrance objects
+              Scenarios\*.SC6
+
+          Strongly recommended / used by the detailed park:
+              Tracks\*.TD6
+              Saved Games\*.SV6 (if you have saved parks)
+
+          The RCT2 files remain separate from Locomotion and are never included in OpenLoco Hybrid releases.
+          "@ | Set-Content -Encoding UTF8 hybrid-artifact\RCT2\PUT-YOUR-RCT2-FILES-HERE.txt
+
+          @"
+          OpenRCT2 v0.5.3 is bundled here as a separate GPL-3.0 runtime and is not linked into the MIT OpenLoco executable.
+          Official project: https://github.com/OpenRCT2/OpenRCT2
+          Runtime archive SHA-256: d67814e13c12e622d4570b9a8b4a417da5b002729f9f851e80d0562b781c80ab
+
+          See the license files distributed with this runtime for OpenRCT2 licensing terms.
+          RollerCoaster Tycoon 2 game assets are NOT included.
+          "@ | Set-Content -Encoding UTF8 hybrid-artifact\rct2-runtime\OPENRCT2-HYBRID-NOTICE.txt
+
+      - name: Upload Hybrid test build
+        uses: actions/upload-artifact@v7
+        with:
+          name: OpenLoco-Hybrid-v0.4.0-alpha-Windows-x64
+          path: hybrid-artifact/
+          if-no-files-found: error
