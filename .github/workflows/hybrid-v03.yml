@@ -54,6 +54,21 @@ jobs:
         shell: cmd
         run: cmake --build --preset windows-release
 
+      - name: Verify Hybrid binary markers
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          exe = Path(r"build/windows/Release/OpenLoco.exe")
+          if not exe.exists():
+              raise SystemExit("OpenLoco.exe was not produced")
+          data = exe.read_bytes()
+          for marker in [b"Parks (Hybrid)", b"v0.3.1-alpha", b"BUILD PARK", b"Park Interior", b"BUILD COASTER"]:
+              if marker not in data:
+                  raise SystemExit(f"Missing Hybrid marker: {marker!r}")
+          print(f"Verified Hybrid executable: {exe.stat().st_size} bytes")
+          '@ | python -
+
       - name: Save vcpkg binary cache
         if: always()
         uses: actions/cache/save@v6
@@ -68,27 +83,33 @@ jobs:
           Copy-Item CHANGELOG.md,CONTRIBUTORS.md,LICENSE hybrid-artifact
           Copy-Item build\windows\Release\* hybrid-artifact -Recurse
           @"
-          OpenLoco Hybrid v0.3.0-alpha - Map Integration
+          OpenLoco Hybrid v0.3.1-alpha - Functional Park Test
+
+          IMPORTANT: extract the full ZIP to a new folder. Do not replace your normal OpenLoco installation.
 
           Test flow:
-          1. Start OpenLoco.exe with your normal Locomotion assets.
-          2. Load or start a scenario.
-          3. Open the Towns/Industries toolbar menu.
-          4. Select "Parks (Hybrid)".
-          5. Click a land tile on the map.
-          6. The native Hybrid Parks window records a real map anchor and keeps the tile highlighted.
-          7. Select Parks again to place another park.
+          1. Start OpenLoco.exe and load/start a normal scenario.
+          2. Open the Towns/Industries toolbar menu and select "Parks (Hybrid)".
+          3. The Regional Management window must contain visible text and buttons.
+          4. Click BUILD PARK, then click a land tile. A 75,000 construction payment is booked to Construction.
+          5. Select ENTER PARK.
+          6. In RIDES / SHOPS build Carousel, Ferris Wheel, Compact Coaster and/or Food Stall. Purchases are charged to Construction.
+          7. In FINANCE change the admission price with TICKET -5 / +5.
+          8. Let the in-game month change (fast-forward is fine). Visitors/revenue/tax/maintenance are calculated from the nearest real town and the net result is posted to company Miscellaneous.
+          9. Reopen the park screens and verify the previous-month figures changed.
 
-          Alpha limitations:
-          - park state is session-only in this first native build;
-          - no park sprites are painted yet; the map anchor is shown with the native selection highlight;
-          - passenger routing/economy hooks are the next integration layer;
-          - ObjData vehicle/cargo/industry files are not modified.
+          Expected alpha behaviour:
+          - the regional window and park interior are native OpenLoco windows;
+          - parks are session-only in v0.3.1 (SV5 persistence comes later);
+          - the regional park is represented by a highlighted map anchor, not a park sprite yet;
+          - attraction buttons are management prototypes, not RCT2 track placement yet;
+          - no ObjData vehicle/cargo/industry file is changed;
+          - multiplayer park finance is intentionally disabled until commands are network-safe.
           "@ | Set-Content -Encoding UTF8 hybrid-artifact\HYBRID-TEST.txt
 
       - name: Upload Hybrid test build
         uses: actions/upload-artifact@v7
         with:
-          name: OpenLoco-Hybrid-v0.3.0-alpha-Windows-x64
+          name: OpenLoco-Hybrid-v0.3.1-alpha-Windows-x64
           path: hybrid-artifact/
           if-no-files-found: error
