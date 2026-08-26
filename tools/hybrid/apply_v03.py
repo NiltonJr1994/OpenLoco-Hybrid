@@ -22,14 +22,14 @@ def patch_toolbar() -> None:
 
     old_mouse_down = '''    static void townsMenuMouseDown(Window& self, WidgetIndex_t widgetIndex)\n    {\n        auto interface = ObjectManager::get<InterfaceSkinObject>();\n        Dropdown::add(0, StringIds::menu_sprite_stringid, { interface->img + InterfaceSkin::ImageIds::toolbar_menu_towns, StringIds::menu_towns });\n        Dropdown::add(1, StringIds::menu_sprite_stringid, { interface->img + InterfaceSkin::ImageIds::toolbar_menu_industries, StringIds::menu_industries });\n        Dropdown::showBelow(&self, widgetIndex, 2, 25, (1 << 6));\n        Dropdown::setHighlightedItem(_defaultTownObjectId);\n    }\n'''
 
-    new_mouse_down = '''    static void townsMenuMouseDown(Window& self, WidgetIndex_t widgetIndex)\n    {\n        auto interface = ObjectManager::get<InterfaceSkinObject>();\n        OpenLoco::Hybrid::ParkWindows::installStrings();\n        Dropdown::add(0, StringIds::menu_sprite_stringid, { interface->img + InterfaceSkin::ImageIds::toolbar_menu_towns, StringIds::menu_towns });\n        Dropdown::add(1, StringIds::menu_sprite_stringid, { interface->img + InterfaceSkin::ImageIds::toolbar_menu_industries, StringIds::menu_industries });\n        Dropdown::add(2, StringIds::menu_sprite_stringid, { interface->img + InterfaceSkin::ImageIds::toolbar_menu_industries, OpenLoco::Hybrid::ParkWindows::kStringMenuParks });\n        Dropdown::showBelow(&self, widgetIndex, 3, 25, (1 << 6));\n        Dropdown::setHighlightedItem(_defaultTownObjectId);\n    }\n'''
+    new_mouse_down = '''    static void townsMenuMouseDown(Window& self, WidgetIndex_t widgetIndex)\n    {\n        auto interface = ObjectManager::get<InterfaceSkinObject>();\n        OpenLoco::Hybrid::ParkWindows::installStrings();\n        const bool parksAvailable = OpenLoco::Hybrid::Parks::hasRct2Assets();\n        Dropdown::add(0, StringIds::menu_sprite_stringid, { interface->img + InterfaceSkin::ImageIds::toolbar_menu_towns, StringIds::menu_towns });\n        Dropdown::add(1, StringIds::menu_sprite_stringid, { interface->img + InterfaceSkin::ImageIds::toolbar_menu_industries, StringIds::menu_industries });\n        if (parksAvailable)\n        {\n            Dropdown::add(2, StringIds::menu_sprite_stringid, { interface->img + InterfaceSkin::ImageIds::toolbar_menu_industries, OpenLoco::Hybrid::ParkWindows::kStringMenuParks });\n        }\n        if (!parksAvailable && _defaultTownObjectId > 1)\n        {\n            _defaultTownObjectId = 0;\n        }\n        Dropdown::showBelow(&self, widgetIndex, parksAvailable ? 3 : 2, 25, (1 << 6));\n        Dropdown::setHighlightedItem(_defaultTownObjectId);\n    }\n'''
 
     if 'OpenLoco::Hybrid::ParkWindows::kStringMenuParks' not in text:
         text = replace_once(text, old_mouse_down, new_mouse_down, "townsMenuMouseDown")
 
     old_dropdown = '''        else if (itemIndex == 1)\n        {\n            IndustryList::open();\n            _defaultTownObjectId = 1;\n        }\n'''
 
-    new_dropdown = '''        else if (itemIndex == 1)\n        {\n            IndustryList::open();\n            _defaultTownObjectId = 1;\n        }\n        else if (itemIndex == 2)\n        {\n            OpenLoco::Hybrid::ParkWindows::open();\n            _defaultTownObjectId = 2;\n        }\n'''
+    new_dropdown = '''        else if (itemIndex == 1)\n        {\n            IndustryList::open();\n            _defaultTownObjectId = 1;\n        }\n        else if (itemIndex == 2 && OpenLoco::Hybrid::Parks::hasRct2Assets())\n        {\n            OpenLoco::Hybrid::ParkWindows::open();\n            _defaultTownObjectId = 2;\n        }\n'''
 
     if 'OpenLoco::Hybrid::ParkWindows::open();' not in text:
         text = replace_once(text, old_dropdown, new_dropdown, "townsMenuDropdown")
@@ -58,7 +58,7 @@ def patch_company_manager() -> None:
 def main() -> None:
     patch_toolbar()
     patch_company_manager()
-    print("Hybrid v0.3.1 regional UI + park economy integration applied successfully.")
+    print("Hybrid v0.4 regional RCT2 bridge hooks applied successfully.")
 
 
 if __name__ == "__main__":
