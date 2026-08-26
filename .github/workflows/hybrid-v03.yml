@@ -46,6 +46,10 @@ jobs:
         shell: pwsh
         run: python tools/hybrid/apply_v03.py
 
+      - name: Apply Hybrid v0.3.2 footprint integration
+        shell: pwsh
+        run: python tools/hybrid/apply_v032.py
+
       - name: Configure
         shell: cmd
         run: cmake --preset windows
@@ -63,7 +67,7 @@ jobs:
           if not exe.exists():
               raise SystemExit("OpenLoco.exe was not produced")
           data = exe.read_bytes()
-          for marker in [b"Parks (Hybrid)", b"v0.3.1-alpha", b"BUILD PARK", b"Park Interior", b"BUILD COASTER"]:
+          for marker in [b"Parks (Hybrid)", b"v0.3.2-alpha", b"7x7 tiles", b"RCT2 assets", b"BUILD PARK", b"Park Interior"]:
               if marker not in data:
                   raise SystemExit(f"Missing Hybrid marker: {marker!r}")
           print(f"Verified Hybrid executable: {exe.stat().st_size} bytes")
@@ -80,36 +84,56 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force hybrid-artifact | Out-Null
+          New-Item -ItemType Directory -Force hybrid-artifact\RCT2 | Out-Null
           Copy-Item CHANGELOG.md,CONTRIBUTORS.md,LICENSE hybrid-artifact
           Copy-Item build\windows\Release\* hybrid-artifact -Recurse
           @"
-          OpenLoco Hybrid v0.3.1-alpha - Functional Park Test
+          OpenLoco Hybrid v0.3.2-alpha - RCT2 Assets + Regional Park Footprint Test
 
           IMPORTANT: extract the full ZIP to a new folder. Do not replace your normal OpenLoco installation.
 
-          Test flow:
-          1. Start OpenLoco.exe and load/start a normal scenario.
-          2. Open the Towns/Industries toolbar menu and select "Parks (Hybrid)".
-          3. The Regional Management window must contain visible text and buttons.
-          4. Click BUILD PARK, then click a land tile. A 75,000 construction payment is booked to Construction.
-          5. Select ENTER PARK.
-          6. In RIDES / SHOPS build Carousel, Ferris Wheel, Compact Coaster and/or Food Stall. Purchases are charged to Construction.
-          7. In FINANCE change the admission price with TICKET -5 / +5.
-          8. Let the in-game month change (fast-forward is fine). Visitors/revenue/tax/maintenance are calculated from the nearest real town and the net result is posted to company Miscellaneous.
-          9. Reopen the park screens and verify the previous-month figures changed.
+          RCT2 ASSETS ARE REQUIRED FOR PARKS TO APPEAR IN THE MENU.
+          Copy from your legitimate RollerCoaster Tycoon 2 installation into the RCT2 folder beside OpenLoco.exe:
+              RCT2\Data\g1.dat
+              RCT2\ObjData\*.DAT
 
-          Expected alpha behaviour:
-          - the regional window and park interior are native OpenLoco windows;
-          - parks are session-only in v0.3.1 (SV5 persistence comes later);
-          - the regional park is represented by a highlighted map anchor, not a park sprite yet;
-          - attraction buttons are management prototypes, not RCT2 track placement yet;
-          - no ObjData vehicle/cargo/industry file is changed;
-          - multiplayer park finance is intentionally disabled until commands are network-safe.
+          You may copy the complete Data and ObjData folders. Do not mix RCT2 ObjData directly into Locomotion ObjData.
+
+          Test flow:
+          1. Before copying RCT2 assets, start the game and confirm Parks (Hybrid) does NOT appear in the Towns/Industries menu.
+          2. Close the game, copy RCT2 Data and ObjData into the included RCT2 folder, then start again.
+          3. Parks (Hybrid) must now appear.
+          4. Open Parks (Hybrid). Text and button labels must be visible.
+          5. Click BUILD PARK and move the mouse over the map. The placement preview must highlight a 7x7 tile square, not one tile.
+          6. Try far from a town: construction must be rejected beyond 48 tiles from the nearest town centre.
+          7. Try a site touching water/map edge: construction must be rejected if the whole 7x7 footprint cannot fit on land.
+          8. Build near a town on land. The company pays 75,000 and the selected park keeps the full 7x7 footprint highlighted.
+          9. ENTER PARK remains the management prototype for the next RCT2-object renderer stage.
+
+          Architecture decision in this build:
+          - the regional park site is fixed at 7x7 tiles (49 tiles) for predictable identification and placement;
+          - the clicked tile is the centre of the site;
+          - future regional entrance/rides/parking visuals may vary inside that 7x7 envelope, similar to an industry complex, without moving the reserved site;
+          - RCT2 assets remain isolated under RCT2\ and are never copied into Locomotion ObjData, protecting vehicle/cargo/industry mods;
+          - no copyrighted RCT2 assets are included in this ZIP; the build only uses the files already owned by the tester;
+          - this alpha validates asset detection, UI, terrain footprint and park siting. Actual RCT2 sprite rendering is the next bridge layer.
           "@ | Set-Content -Encoding UTF8 hybrid-artifact\HYBRID-TEST.txt
+
+          @"
+          REQUIRED RCT2 FILES
+
+          Place your original RCT2 files here without merging them with Locomotion:
+
+              RCT2\Data\g1.dat
+              RCT2\ObjData\*.DAT
+
+          Recommended: copy the entire Data and ObjData folders from the RCT2 installation.
+          Parks (Hybrid) stays hidden until both g1.dat and at least one ObjData .DAT are detected.
+          "@ | Set-Content -Encoding UTF8 hybrid-artifact\RCT2\PUT-RCT2-ASSETS-HERE.txt
 
       - name: Upload Hybrid test build
         uses: actions/upload-artifact@v7
         with:
-          name: OpenLoco-Hybrid-v0.3.1-alpha-Windows-x64
+          name: OpenLoco-Hybrid-v0.3.2-alpha-Windows-x64
           path: hybrid-artifact/
           if-no-files-found: error
