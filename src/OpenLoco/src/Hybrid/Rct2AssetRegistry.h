@@ -1,7 +1,17 @@
 #pragma once
 
 #include <OpenLoco/Core/FileSystem.hpp>
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <OpenLoco/Platform/Platform.h>
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
 
 #include <algorithm>
 #include <array>
