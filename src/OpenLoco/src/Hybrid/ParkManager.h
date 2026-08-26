@@ -1,13 +1,19 @@
 #pragma once
 
 #include "Economy/Expenditures.h"
+#include "Map/TileManager.h"
 #include "SceneManager.h"
 #include "World/CompanyManager.h"
 #include "World/TownManager.h"
+#include <OpenLoco/Core/FileSystem.hpp>
+#include <OpenLoco/Platform/Platform.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
+#include <cstdlib>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace OpenLoco::Hybrid::Parks
@@ -20,10 +26,16 @@ namespace OpenLoco::Hybrid::Parks
         foodStall,
     };
 
+    constexpr currency32_t kParkConstructionCost = 75000;
+    constexpr int16_t kTileWorldSize = 32;
+    constexpr int16_t kParkFootprintTiles = 7;
+    constexpr int16_t kParkFootprintRadius = kParkFootprintTiles / 2;
+    constexpr int16_t kMaxTownDistanceTiles = 48;
+
     struct Park
     {
         uint16_t id{};
-        World::Pos2 position{};
+        World::Pos2 position{}; // centre tile of the regional 7x7 site
         CompanyId owner{ CompanyId::null };
         uint16_t closestTownId{ 0xFFFF };
 
@@ -50,7 +62,75 @@ namespace OpenLoco::Hybrid::Parks
     inline uint16_t _selectedParkId{};
     inline std::string _lastStatus{ "Hybrid park system ready." };
 
-    constexpr currency32_t kParkConstructionCost = 75000;
+    inline fs::path getRct2AssetsRoot()
+    {
+        return Platform::getCurrentExecutablePath().parent_path() / "RCT2";
+    }
+
+    inline bool hasRct2ObjectData(const fs::path& objDataPath)
+    {
+        try
+        {
+            if (!fs::is_directory(objDataPath))
+            {
+                return false;
+            }
+
+            for (const auto& entry : fs::directory_iterator(objDataPath))
+            {
+                if (!entry.is_regular_file())
+                {
+                    continue;
+                }
+
+                auto extension = entry.path().extension().string();
+                std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                if (extension == ".dat")
+                {
+                    return true;
+                }
+            }
+        }
+        catch (const std::exception&)
+        {
+            return false;
+        }
+        return false;
+    }
+
+    inline bool hasRct2Assets()
+    {
+        try
+        {
+            const auto root = getRct2AssetsRoot();
+            const auto g1 = root / "Data" / "g1.dat";
+            if (!fs::is_regular_file(g1) || fs::file_size(g1) < 1024 * 1024)
+            {
+                return false;
+            }
+            return hasRct2ObjectData(root / "ObjData");
+        }
+        catch (const std::exception&)
+        {
+            return false;
+        }
+    }
+
+    inline std::pair<World::Pos2, World::Pos2> footprintBounds(const World::Pos2& centre)
+    {
+        constexpr int16_t radiusWorld = kParkFootprintRadius * kTileWorldSize;
+        return {
+            World::Pos2{ static_cast<coord_t>(centre.x - radiusWorld), static_cast<coord_t>(centre.y - radiusWorld) },
+            World::Pos2{ static_cast<coord_t>(centre.x + radiusWorld), static_cast<coord_t>(centre.y + radiusWorld) },
+        };
+    }
+
+    inline bool footprintsOverlap(const World::Pos2& a, const World::Pos2& b)
+    {
+        const auto [aMin, aMax] = footprintBounds(a);
+        const auto [bMin, bMax] = footprintBounds(b);
+        return !(aMax.x < bMin.x || bMax.x < aMin.x || aMax.y < bMin.y || bMax.y < aMin.y);
+    }
 
     inline uint16_t attractionCount(const Park& park)
     {
@@ -93,6 +173,74 @@ namespace OpenLoco::Hybrid::Parks
             return;
         }
         park.closestTownId = enumValue(result->first);
+    }
+
+    inline bool validateParkSite(const World::Pos2& centre, std::string& reason)
+    {
+        if (!hasRct2Assets())
+        {
+            reason = "RCT2 assets missing. Put Data/g1.dat and ObjData inside the RCT2 folder beside OpenLoco.exe.";
+            return false;
+        }
+
+        const auto closest = TownManager::getClosestTownAndDensity(centre);
+        if (!closest.has_value())
+        {
+            reason = "A park must be built near an existing town.";
+            return false;
+        }
+
+        auto* town = TownManager::get(closest->first);
+        if (town == nullptr)
+        {
+            reason = "The nearest town could not be resolved.";
+            return false;
+        }
+
+        const auto distanceWorld = std::abs(static_cast<int32_t>(town->x) - centre.x) + std::abs(static_cast<int32_t>(town->y) - centre.y);
+        const auto distanceTiles = distanceWorld / kTileWorldSize;
+        if (distanceTiles > kMaxTownDistanceTiles)
+        {
+            reason = "This site is too far from a town. Regional parks must be within 48 tiles of a town centre.";
+            return false;
+        }
+
+        for (const auto& existing : _parks)
+        {
+            if (footprintsOverlap(existing.position, centre))
+            {
+                reason = "This 7x7 park site overlaps another park.";
+                return false;
+            }
+        }
+
+        for (int16_t y = -kParkFootprintRadius; y <= kParkFootprintRadius; ++y)
+        {
+            for (int16_t x = -kParkFootprintRadius; x <= kParkFootprintRadius; ++x)
+            {
+                const World::Pos2 worldPos{
+                    static_cast<coord_t>(centre.x + x * kTileWorldSize),
+                    static_cast<coord_t>(centre.y + y * kTileWorldSize),
+                };
+                const auto tilePos = World::toTileSpace(worldPos);
+                if (!World::validCoords(tilePos))
+                {
+                    reason = "The full 7x7 park footprint must fit inside the map.";
+                    return false;
+                }
+
+                const auto tile = World::TileManager::get(tilePos);
+                const auto* surface = tile.surface();
+                if (surface == nullptr || surface->water())
+                {
+                    reason = "The regional 7x7 park footprint must be entirely on land.";
+                    return false;
+                }
+            }
+        }
+
+        reason.clear();
+        return true;
     }
 
     inline uint32_t estimateMonthlyVisitors(const Park& park)
@@ -145,6 +293,13 @@ namespace OpenLoco::Hybrid::Parks
 
     inline Park* createPark(const World::Pos2& position)
     {
+        std::string siteError;
+        if (!validateParkSite(position, siteError))
+        {
+            _lastStatus = siteError;
+            return nullptr;
+        }
+
         const auto owner = CompanyManager::getControllingId();
         if (owner == CompanyId::null)
         {
@@ -164,7 +319,7 @@ namespace OpenLoco::Hybrid::Parks
 
         _parks.push_back(park);
         _selectedParkId = park.id;
-        _lastStatus = "Park created. Enter it and build attractions before the first visitors arrive.";
+        _lastStatus = "Regional park site created: 7x7 tiles reserved around the selected centre.";
         return &_parks.back();
     }
 
