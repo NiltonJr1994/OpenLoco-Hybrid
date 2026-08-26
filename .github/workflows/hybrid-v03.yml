@@ -1,0 +1,65 @@
+name: Hybrid v0.3 Windows test build
+
+on:
+  push:
+    branches:
+      - hybrid/v0.3-map-integration
+  workflow_dispatch:
+
+jobs:
+  windows-x64:
+    name: Hybrid Windows x64
+    runs-on: windows-2022
+    env:
+      CONFIGURATION: Release
+      POWERSHELL_TELEMETRY_OPTOUT: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Apply Hybrid map integration
+        shell: pwsh
+        run: python tools/hybrid/apply_v03.py
+
+      - name: Configure
+        shell: cmd
+        run: cmake --preset windows
+
+      - name: Build
+        shell: cmd
+        run: cmake --build --preset windows-release
+
+      - name: Package test build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force hybrid-artifact | Out-Null
+          Copy-Item CHANGELOG.md,CONTRIBUTORS.md,LICENSE hybrid-artifact
+          Copy-Item build\windows\Release\* hybrid-artifact -Recurse
+          @"
+          OpenLoco Hybrid v0.3.0-alpha - Map Integration
+
+          Test flow:
+          1. Start OpenLoco.exe with your normal Locomotion assets.
+          2. Load or start a scenario.
+          3. Open the Towns/Industries toolbar menu.
+          4. Select "Parks (Hybrid)".
+          5. Click a land tile on the map.
+          6. The native Hybrid Parks window records a real map anchor and keeps the tile highlighted.
+          7. Select Parks again to place another park.
+
+          Alpha limitations:
+          - park state is session-only in this first native build;
+          - no park sprites are painted yet; the map anchor is shown with the native selection highlight;
+          - passenger routing/economy hooks are the next integration layer;
+          - ObjData vehicle/cargo/industry files are not modified.
+          "@ | Set-Content -Encoding UTF8 hybrid-artifact\HYBRID-TEST.txt
+
+      - name: Upload Hybrid test build
+        uses: actions/upload-artifact@v7
+        with:
+          name: OpenLoco-Hybrid-v0.3.0-alpha-Windows-x64
+          path: hybrid-artifact/
+          if-no-files-found: error
