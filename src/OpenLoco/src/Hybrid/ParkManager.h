@@ -108,13 +108,19 @@ namespace OpenLoco::Hybrid::Parks
             return 0;
         }
 
-        // Regional alpha model: each real attraction increases the share of the
-        // nearest town that is willing to visit. Popularity and park capacity
-        // then cap the actual attendance. Transport routing replaces part of
-        // this equation in the next layer.
+        // Regional alpha model: attractions create potential demand, while
+        // popularity, admission price and capacity determine how much of that
+        // demand converts into actual attendance. Real transport accessibility
+        // will become another multiplier in the next integration layer.
         const uint32_t attractionScore = std::min<uint32_t>(42, 4 + attractionCount(park) * 6 + park.foodStallCount * 2);
         uint64_t visitors = population * attractionScore / 100;
         visitors = visitors * park.popularity / 1000;
+
+        // Admission elasticity. 20 is the neutral/default ticket. Cheaper
+        // admission can raise attendance by up to 20%; expensive admission
+        // progressively suppresses demand, down to 25% at the extreme.
+        const int32_t priceDemandPercent = std::clamp<int32_t>(120 - park.ticketPrice, 25, 120);
+        visitors = visitors * priceDemandPercent / 100;
 
         const uint64_t monthlyCapacity = static_cast<uint64_t>(park.capacity) * 30;
         return static_cast<uint32_t>(std::min<uint64_t>(visitors, monthlyCapacity));
@@ -234,7 +240,7 @@ namespace OpenLoco::Hybrid::Parks
     {
         const int32_t next = std::clamp<int32_t>(park.ticketPrice + delta, 0, 100);
         park.ticketPrice = next;
-        _lastStatus = "Park ticket price updated.";
+        _lastStatus = "Park ticket price updated; projected demand now reflects the new admission price.";
     }
 
     inline void updateMonthly()
