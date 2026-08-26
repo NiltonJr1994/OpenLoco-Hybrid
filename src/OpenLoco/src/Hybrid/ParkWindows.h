@@ -26,6 +26,8 @@
 
 namespace OpenLoco::Hybrid::ParkWindows
 {
+    using namespace Ui;
+
     // Hybrid window types deliberately live outside the original OpenLoco range.
     // They are kept local for the alpha so the SV5 ABI and vanilla WindowType
     // layout remain untouched.
