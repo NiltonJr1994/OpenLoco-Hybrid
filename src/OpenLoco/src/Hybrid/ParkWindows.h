@@ -33,11 +33,14 @@ namespace OpenLoco::Hybrid::ParkWindows
     // layout remain untouched.
     static constexpr auto kParkListWindowType = static_cast<Ui::WindowType>(62);
 
-    // The current English language table ends at 2467. These strings are
-    // installed at runtime for this alpha, avoiding any dependency on object
-    // DAT files or on the user's selected vehicle pack.
+    // The current English language table ends at 2467. These IDs are still
+    // within StringManager's pointer table, but do not have backing storage of
+    // their own. installStrings() therefore points them at static Hybrid text
+    // instead of trying to memcpy into a null string pointer.
     static constexpr StringId kStringMenuParks = 2468;
     static constexpr StringId kStringTitleParks = 2469;
+    inline constexpr char kMenuParksText[] = "Parks (Hybrid)";
+    inline constexpr char kTitleParksText[] = "Hybrid Parks";
 
     struct Park
     {
@@ -54,8 +57,8 @@ namespace OpenLoco::Hybrid::ParkWindows
 
     inline void installStrings()
     {
-        StringManager::setString(kStringMenuParks, "Parks (Hybrid)");
-        StringManager::setString(kStringTitleParks, "Hybrid Parks");
+        StringManager::swapString(kStringMenuParks, kMenuParksText);
+        StringManager::swapString(kStringTitleParks, kTitleParksText);
     }
 
     enum widx
