@@ -63,6 +63,10 @@ jobs:
         shell: cmd
         run: cmake --build --preset windows-release
 
+      - name: Test OpenLoco integration
+        shell: pwsh
+        run: ctest --test-dir build/windows -C Release --output-on-failure
+
       - name: Verify Hybrid binary markers
         shell: pwsh
         run: |

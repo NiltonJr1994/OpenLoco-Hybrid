@@ -73,7 +73,10 @@ namespace OpenLoco::Hybrid::Parks
         {
             const int dx = std::abs(static_cast<int>(position.x) - park.position.x);
             const int dy = std::abs(static_cast<int>(position.y) - park.position.y);
-            if (dx <= kParkFootprintRadius * kTileWorldSize && dy <= kParkFootprintRadius * kTileWorldSize) return true;
+            if (dx <= kParkFootprintRadius * kTileWorldSize && dy <= kParkFootprintRadius * kTileWorldSize)
+            {
+                return true;
+            }
         }
         return false;
     }
@@ -262,8 +265,15 @@ namespace OpenLoco::Hybrid::Parks
         }
         auto entrance = Rct2Assets::get().entrances.front();
         uint32_t entranceImage;
-        try { entranceImage = Rct2Graphics::load(entrance); }
-        catch (const std::exception& e) { _lastStatus = e.what(); return nullptr; }
+        try
+        {
+            entranceImage = Rct2Graphics::load(entrance);
+        }
+        catch (const std::exception& e)
+        {
+            _lastStatus = e.what();
+            return nullptr;
+        }
         _parks.reserve(_parks.size() + 1);
         if (!pay(owner, kParkConstructionCost, ExpenditureType::Construction, position))
         {
@@ -289,8 +299,15 @@ namespace OpenLoco::Hybrid::Parks
     {
         auto* park = selectedPark();
         auto definition = Rct2Assets::selectedRide();
-        if (!park || !definition || SceneManager::isNetworked() || park->owner != CompanyManager::getControllingId()) return false;
-        if (park->rides.size() >= 9) { _lastStatus = "This native slice supports nine object instances per park."; return false; }
+        if (!park || !definition || SceneManager::isNetworked() || park->owner != CompanyManager::getControllingId())
+        {
+            return false;
+        }
+        if (park->rides.size() >= 9)
+        {
+            _lastStatus = "This native slice supports nine object instances per park.";
+            return false;
+        }
         try
         {
             const auto image = Rct2Graphics::load(definition);
@@ -299,7 +316,11 @@ namespace OpenLoco::Hybrid::Parks
             Gfx::invalidateScreen();
             return true;
         }
-        catch (const std::exception& e) { _lastStatus = e.what(); return false; }
+        catch (const std::exception& e)
+        {
+            _lastStatus = e.what();
+            return false;
+        }
     }
 
     // No fabricated visitor revenue: operational simulation is outside this slice.

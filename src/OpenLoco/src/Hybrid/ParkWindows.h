@@ -175,11 +175,23 @@ namespace OpenLoco::Hybrid::ParkWindows
 
     inline void prepareDraw(Ui::Window& self)
     {
-        if (Parks::selectedPark() == nullptr) _insidePark = false;
+        if (Parks::selectedPark() == nullptr)
+        {
+            _insidePark = false;
+        }
         const bool assetsReady = Parks::hasRct2Assets();
-        if (auto* w = findWidget(self, Widx::instantiate)) w->disabled = !_insidePark || !Rct2Assets::selectedRide() || !Parks::selectedPark() || Parks::selectedPark()->rides.size() >= 9;
-        if (auto* w = findWidget(self, Widx::previousPark)) w->disabled = Parks::_parks.size() < 2;
-        if (auto* w = findWidget(self, Widx::rescanRct2)) w->disabled = !Parks::_parks.empty();
+        if (auto* w = findWidget(self, Widx::instantiate))
+        {
+            w->disabled = !_insidePark || !Rct2Assets::selectedRide() || !Parks::selectedPark() || Parks::selectedPark()->rides.size() >= 9;
+        }
+        if (auto* w = findWidget(self, Widx::previousPark))
+        {
+            w->disabled = Parks::_parks.size() < 2;
+        }
+        if (auto* w = findWidget(self, Widx::rescanRct2))
+        {
+            w->disabled = !Parks::_parks.empty();
+        }
         const bool hasPark = Parks::selectedPark() != nullptr;
 
         if (auto* w = findWidget(self, Widx::buildPark); w != nullptr)
@@ -219,14 +231,20 @@ namespace OpenLoco::Hybrid::ParkWindows
         }
         if (id == Widx::instantiate)
         {
-            if (_insidePark) Parks::instantiateSelectedRide();
+            if (_insidePark)
+            {
+                Parks::instantiateSelectedRide();
+            }
             self.invalidate();
             return;
         }
         if (id == Widx::previousPark)
         {
             selectPreviousPark();
-            if (auto* p = Parks::selectedPark()) selectParkFootprint(p->position);
+            if (auto* p = Parks::selectedPark())
+            {
+                selectParkFootprint(p->position);
+            }
             self.invalidate();
             return;
         }
@@ -237,7 +255,10 @@ namespace OpenLoco::Hybrid::ParkWindows
         }
         if (id == Widx::rescanRct2)
         {
-            if (!Parks::_parks.empty()) return;
+            if (!Parks::_parks.empty())
+            {
+                return;
+            }
             Rct2Graphics::reset();
             Rct2Assets::scan();
             Parks::_lastStatus = Rct2Assets::get().status;
@@ -342,11 +363,20 @@ namespace OpenLoco::Hybrid::ParkWindows
                         const auto image = Rct2Graphics::load(ride);
                         drawingCtx.drawImage(ZoomLevel::full, 495, 190, ImageId(image));
                     }
-                    catch (const std::exception& e) { Parks::_lastStatus = e.what(); }
+                    catch (const std::exception& e)
+                    {
+                        Parks::_lastStatus = e.what();
+                    }
                 }
             }
-            else drawText(tr, 12, 146, "Enter park opens the native object browser here.");
-            if (!park->rides.empty()) drawText(tr, 12, 234, "Last instance: " + park->rides.back().definition->name);
+            else
+            {
+                drawText(tr, 12, 146, "Enter park opens the native object browser here.");
+            }
+            if (!park->rides.empty())
+            {
+                drawText(tr, 12, 234, "Last instance: " + park->rides.back().definition->name);
+            }
         }
         else
         {
@@ -372,7 +402,10 @@ namespace OpenLoco::Hybrid::ParkWindows
     {
         installStrings();
         Rct2Assets::get();
-        if (SceneManager::isNetworked() || SceneManager::isEditorMode()) return nullptr;
+        if (SceneManager::isNetworked() || SceneManager::isEditorMode())
+        {
+            return nullptr;
+        }
 
         auto* window = WindowManager::bringToFront(kParkListWindowType, 0);
         if (window == nullptr)
