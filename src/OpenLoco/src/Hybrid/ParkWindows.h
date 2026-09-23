@@ -361,7 +361,7 @@ namespace OpenLoco::Hybrid::ParkWindows
                     try
                     {
                         const auto image = Rct2Graphics::load(ride);
-                        drawingCtx.drawImage(ZoomLevel::full, 495, 190, ImageId(image));
+                        drawingCtx.drawImage(ZoomLevel::full, { 495, 190 }, ImageId(image));
                     }
                     catch (const std::exception& e)
                     {

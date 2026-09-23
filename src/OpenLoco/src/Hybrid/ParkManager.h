@@ -3,6 +3,7 @@
 #include "Economy/Expenditures.h"
 #include "Hybrid/Rct2AssetRegistry.h"
 #include "Hybrid/Rct2Graphics.h"
+#include "Map/SurfaceElement.h"
 #include "Map/TileManager.h"
 #include "SceneManager.h"
 #include "World/CompanyManager.h"
