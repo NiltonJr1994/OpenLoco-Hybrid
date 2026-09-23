@@ -33,6 +33,41 @@ namespace OpenLoco::Hybrid::Rct2Graphics
         _loaded.clear();
         _images.clear();
     }
+    // A small, native isometric garden/plaza tile, using Locomotion's palette.
+    // Two tiles are shared by every park, never registered as Locomotion objects.
+    inline uint32_t loadGround()
+    {
+        if (_images.size() + 2 > kMaxImages)
+        {
+            throw std::runtime_error("Native park sprite capacity reached");
+        }
+        const auto base = kFirstImage + static_cast<uint32_t>(_images.size());
+        for (int path = 0; path < 2; ++path)
+        {
+            auto image = std::make_unique<Image>();
+            image->pixels.resize(64 * 32);
+            for (int y = 0; y < 32; ++y)
+            {
+                for (int x = 0; x < 64; ++x)
+                {
+                    const int diamond = std::abs(2 * x - 63) + 2 * std::abs(2 * y - 31);
+                    if (diamond > 63)
+                        continue;
+                    const auto colour = path ? Colour::grey : Colour::mutedGrassGreen;
+                    const auto shade = diamond > 57 ? 3 : (path ? 7 : 5);
+                    image->pixels[y * 64 + x] = Colours::getShade(colour, shade);
+                }
+            }
+            image->element.offset = image->pixels.data();
+            image->element.width = 64;
+            image->element.height = 32;
+            image->element.xOffset = -32;
+            image->element.yOffset = -16;
+            image->element.flags = Gfx::G1ElementFlags::hasTransparency;
+            _images.push_back(std::move(image));
+        }
+        return base;
+    }
     inline uint32_t load(const std::shared_ptr<const Rct2::Definition>& definition)
     {
         for (const auto& loaded : _loaded)

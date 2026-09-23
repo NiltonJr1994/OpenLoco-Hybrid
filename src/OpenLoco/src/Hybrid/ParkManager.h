@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -36,6 +37,7 @@ namespace OpenLoco::Hybrid::Parks
         bool open{ true };
         std::shared_ptr<const Rct2::Definition> entrance;
         uint32_t entranceImage{};
+        uint32_t groundImage{};
         struct RideInstance
         {
             std::shared_ptr<const Rct2::Definition> definition;
@@ -55,12 +57,16 @@ namespace OpenLoco::Hybrid::Parks
     };
 
     inline std::vector<Park> _parks{};
+    inline std::optional<Park> _preview;
+    inline std::optional<uint32_t> _groundImage;
     inline uint16_t _nextParkId{ 1 };
     inline uint16_t _selectedParkId{};
     inline std::string _lastStatus{ "Hybrid park system ready." };
 
     inline void reset()
     {
+        _preview.reset();
+        _groundImage.reset();
         _parks.clear();
         _nextParkId = 1;
         _selectedParkId = 0;
@@ -100,6 +106,42 @@ namespace OpenLoco::Hybrid::Parks
             World::Pos2{ static_cast<coord_t>(centre.x - radiusWorld), static_cast<coord_t>(centre.y - radiusWorld) },
             World::Pos2{ static_cast<coord_t>(centre.x + radiusWorld), static_cast<coord_t>(centre.y + radiusWorld) },
         };
+    }
+
+    inline uint32_t groundImage()
+    {
+        if (!_groundImage)
+            _groundImage = Rct2Graphics::loadGround();
+        return *_groundImage;
+    }
+
+    inline void clearPreview()
+    {
+        if (_preview)
+        {
+            _preview.reset();
+            Gfx::invalidateScreen();
+        }
+    }
+
+    inline void preparePreview()
+    {
+        groundImage();
+        Rct2Graphics::load(Rct2Assets::get().entrances.front());
+    }
+
+    inline void movePreview(const World::Pos2& position)
+    {
+        const auto centre = normaliseCentre(position);
+        if (_preview && _preview->position == centre)
+            return;
+        Park preview;
+        preview.position = centre;
+        preview.entrance = Rct2Assets::get().entrances.front();
+        preview.entranceImage = Rct2Graphics::load(preview.entrance);
+        preview.groundImage = groundImage();
+        _preview = std::move(preview);
+        Gfx::invalidateScreen();
     }
 
     inline bool footprintsOverlap(const World::Pos2& a, const World::Pos2& b)
@@ -269,6 +311,7 @@ namespace OpenLoco::Hybrid::Parks
         try
         {
             entranceImage = Rct2Graphics::load(entrance);
+            groundImage();
         }
         catch (const std::exception& e)
         {
@@ -287,6 +330,7 @@ namespace OpenLoco::Hybrid::Parks
         park.owner = owner;
         park.entrance = entrance;
         park.entranceImage = entranceImage;
+        park.groundImage = groundImage();
         refreshClosestTown(park);
 
         _parks.push_back(std::move(park));

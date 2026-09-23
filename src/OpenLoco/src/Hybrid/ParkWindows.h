@@ -116,10 +116,10 @@ namespace OpenLoco::Hybrid::ParkWindows
         return nullptr;
     }
 
-    inline void drawText(Gfx::TextRenderer& tr, int16_t x, int16_t y, const std::string& text)
+    inline void drawText(const Ui::Window& self, Gfx::TextRenderer& tr, int16_t x, int16_t y, const std::string& text)
     {
         const auto clipped = text.substr(0, 84);
-        tr.drawString({ x, y }, Colour::black, clipped.c_str());
+        tr.drawString({ static_cast<int16_t>(self.x + x), static_cast<int16_t>(self.y + y) }, Colour::black, clipped.c_str());
     }
 
     inline void clearMapSelection()
@@ -148,6 +148,16 @@ namespace OpenLoco::Hybrid::ParkWindows
             return;
         }
 
+        try
+        {
+            Parks::preparePreview();
+        }
+        catch (const std::exception& e)
+        {
+            Parks::_lastStatus = e.what();
+            self.invalidate();
+            return;
+        }
         clearMapSelection();
         ToolManager::toolSet(self, panel, CursorId::placeTown);
         Input::setFlag(Input::Flags::flag6);
@@ -218,6 +228,7 @@ namespace OpenLoco::Hybrid::ParkWindows
         {
             ToolManager::toolCancel();
         }
+        Parks::clearPreview();
         clearMapSelection();
         Ui::Windows::Main::hideGridlines();
     }
@@ -259,6 +270,8 @@ namespace OpenLoco::Hybrid::ParkWindows
             {
                 return;
             }
+            Parks::clearPreview();
+            Parks::_groundImage.reset();
             Rct2Graphics::reset();
             Rct2Assets::scan();
             Parks::_lastStatus = Rct2Assets::get().status;
@@ -292,6 +305,7 @@ namespace OpenLoco::Hybrid::ParkWindows
 
     inline void onToolAbort([[maybe_unused]] Ui::Window& self, [[maybe_unused]] WidgetIndex_t widgetIndex, [[maybe_unused]] const WidgetId id)
     {
+        Parks::clearPreview();
         clearMapSelection();
         Ui::Windows::Main::hideGridlines();
     }
@@ -301,10 +315,17 @@ namespace OpenLoco::Hybrid::ParkWindows
         const auto mapPos = Ui::ViewportInteraction::getSurfaceOrWaterLocFromUi({ x, y });
         if (!mapPos)
         {
+            Parks::clearPreview();
             clearMapSelection();
             return;
         }
+        Parks::movePreview(*mapPos);
         selectParkFootprint(*mapPos);
+        std::string reason;
+        Parks::_lastStatus = Parks::validateParkSite(*mapPos, reason)
+            ? "Valid 7x7 site. Click to build for 5,000."
+            : reason;
+        self.invalidate();
     }
 
     inline void onToolDown(Ui::Window& self, [[maybe_unused]] WidgetIndex_t widgetIndex, [[maybe_unused]] const WidgetId id, int16_t x, int16_t y)
@@ -341,27 +362,27 @@ namespace OpenLoco::Hybrid::ParkWindows
         auto tr = Gfx::TextRenderer(drawingCtx);
         const auto& assets = Rct2Assets::get();
 
-        drawText(tr, 12, 27, "OpenLoco Hybrid v0.5.0-alpha - Native RCT2 assets");
-        drawText(tr, 12, 47, std::string("Decoded registry: ") + (assets.ready ? "READY" : "NOT READY"));
-        drawText(tr, 12, 64, "Rides/shops: " + std::to_string(assets.rides.size()) + "    Entrances: " + std::to_string(assets.entrances.size()));
-        drawText(tr, 12, 81, "Unsupported classes: " + std::to_string(assets.unsupported) + "    Rejected files: " + std::to_string(assets.rejected));
+        drawText(self, tr, 12, 27, "OpenLoco Hybrid v0.5.1-alpha - Native RCT2 assets");
+        drawText(self, tr, 12, 47, std::string("Decoded registry: ") + (assets.ready ? "READY" : "NOT READY"));
+        drawText(self, tr, 12, 64, "Rides/shops: " + std::to_string(assets.rides.size()) + "    Entrances: " + std::to_string(assets.entrances.size()));
+        drawText(self, tr, 12, 81, "Unsupported classes: " + std::to_string(assets.unsupported) + "    Rejected files: " + std::to_string(assets.rejected));
         if (auto* park = Parks::selectedPark())
         {
-            drawText(tr, 12, 103, "Park #" + std::to_string(park->id) + "    7x7 tiles    Objects: " + std::to_string(park->rides.size()) + "/9");
-            drawText(tr, 12, 120, "Entrance: " + park->entrance->name + " [" + park->entrance->id + "]");
+            drawText(self, tr, 12, 103, "Park #" + std::to_string(park->id) + "    7x7 tiles    Objects: " + std::to_string(park->rides.size()) + "/9");
+            drawText(self, tr, 12, 120, "Entrance: " + park->entrance->name + " [" + park->entrance->id + "]");
             if (_insidePark)
             {
                 if (auto ride = Rct2Assets::selectedRide())
                 {
-                    drawText(tr, 12, 146, "Object " + std::to_string(Rct2Assets::_selectedRide + 1) + "/" + std::to_string(assets.rides.size()) + ": " + ride->name.substr(0, 46));
-                    drawText(tr, 12, 163, "DAT: " + ride->id + "    RCT2 ride type: " + std::to_string(ride->rideTypes[0]));
-                    drawText(tr, 12, 180, ride->description.substr(0, 65));
-                    drawText(tr, 12, 197, "Capacity definition: " + ride->capacity.substr(0, 42));
-                    drawText(tr, 12, 214, "Decoded definition bytes: " + std::to_string(ride->payload.size()));
+                    drawText(self, tr, 12, 146, "Object " + std::to_string(Rct2Assets::_selectedRide + 1) + "/" + std::to_string(assets.rides.size()) + ": " + ride->name.substr(0, 46));
+                    drawText(self, tr, 12, 163, "DAT: " + ride->id + "    RCT2 ride type: " + std::to_string(ride->rideTypes[0]));
+                    drawText(self, tr, 12, 180, ride->description.substr(0, 65));
+                    drawText(self, tr, 12, 197, "Capacity definition: " + ride->capacity.substr(0, 42));
+                    drawText(self, tr, 12, 214, "Decoded definition bytes: " + std::to_string(ride->payload.size()));
                     try
                     {
                         const auto image = Rct2Graphics::load(ride);
-                        drawingCtx.drawImage(ZoomLevel::full, { 495, 190 }, ImageId(image));
+                        drawingCtx.drawImage(ZoomLevel::full, { static_cast<int16_t>(self.x + 495), static_cast<int16_t>(self.y + 190) }, ImageId(image));
                     }
                     catch (const std::exception& e)
                     {
@@ -371,21 +392,27 @@ namespace OpenLoco::Hybrid::ParkWindows
             }
             else
             {
-                drawText(tr, 12, 146, "Enter park opens the native object browser here.");
+                drawText(self, tr, 12, 146, "Enter park opens the native object browser here.");
             }
             if (!park->rides.empty())
             {
-                drawText(tr, 12, 234, "Last instance: " + park->rides.back().definition->name);
+                drawText(self, tr, 12, 234, "Last instance: " + park->rides.back().definition->name);
             }
         }
         else
         {
-            drawText(tr, 12, 110, "Build park: select a clear, flat 7x7 site within 48 tiles of a town.");
-            drawText(tr, 12, 130, "Construction charge: 5,000. Native object instances are free in this alpha.");
+            drawText(self, tr, 12, 110, "Build park: select a clear, flat 7x7 site within 48 tiles of a town.");
+            drawText(self, tr, 12, 130, "Construction charge: 5,000. Native object instances are free in this alpha.");
         }
-        drawText(tr, 12, 259, "Status: " + Parks::_lastStatus);
-        drawText(tr, 12, 280, "Session-only: parks are not saved. TD6 and ride simulation are not implemented.");
-        drawText(tr, 12, 372, "RCT2 ObjData remains isolated from all Locomotion objects and mods.");
+        const auto status = "Status: " + Parks::_lastStatus;
+        const auto split = status.size() > 80 ? status.rfind(' ', 80) : std::string::npos;
+        drawText(self, tr, 12, 251, status.substr(0, split));
+        if (split != std::string::npos)
+        {
+            drawText(self, tr, 12, 264, status.substr(split + 1));
+        }
+        drawText(self, tr, 12, 280, "Session-only: parks are not saved. TD6 and ride simulation are not implemented.");
+        drawText(self, tr, 12, 372, "RCT2 ObjData remains isolated from all Locomotion objects and mods.");
     }
 
     inline constexpr WindowEventList kEvents = {

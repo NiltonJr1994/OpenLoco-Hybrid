@@ -1,4 +1,4 @@
-#include "../src/Hybrid/ParkManager.h"
+#include "../src/Hybrid/ParkWindows.h"
 #include <OpenLoco/Graphics/RenderTarget.h>
 #include <OpenLoco/Graphics/SoftwareDrawingContext.h>
 #include <gtest/gtest.h>
@@ -120,4 +120,58 @@ TEST_F(HybridTest, InstancesBelongToSelectedParkRetainDefinitionAndRespectCapaci
     Parks::reset();
     EXPECT_FALSE(Parks::contains({ 640, 640 }));
     EXPECT_EQ(Parks::selectedPark(), nullptr);
+}
+
+TEST_F(HybridTest, WindowTextRendersInsideAnOffsetClippedWindow)
+{
+    // Reproduces the blank window when it is away from the screen origin.
+    auto* glyph = Gfx::getG1Element(ImageIds::characters_medium_normal_space + 224 + 'A' - 32);
+    const auto savedGlyph = *glyph;
+    std::array<uint8_t, 4> ink{ 1, 1, 1, 1 };
+    glyph->offset = ink.data();
+    glyph->width = 2;
+    glyph->height = 2;
+    glyph->xOffset = 0;
+    glyph->yOffset = 0;
+    glyph->flags = Gfx::G1ElementFlags::hasTransparency;
+    std::array<uint8_t, 64 * 64> pixels;
+    pixels.fill(99);
+    Gfx::SoftwareDrawingContext context;
+    context.pushRenderTarget({});
+    context.pushRenderTarget({ pixels.data(), 400, 200, 64, 64, 0 });
+    Gfx::TextRenderer renderer(context);
+    Ui::Window window{};
+    window.x = 400;
+    window.y = 200;
+    ParkWindows::drawText(window, renderer, 12, 27, "A");
+    context.popRenderTarget();
+    *glyph = savedGlyph;
+    EXPECT_NE(pixels[27 * 64 + 12], 99);
+    EXPECT_EQ(pixels[0], 99);
+}
+
+TEST_F(HybridTest, PlacementPreviewMovesWithoutCreatingOrReservingAParkAndClearsOnReset)
+{
+    Rct2Assets::_registry.entrances.push_back(definition);
+    Parks::preparePreview();
+    Parks::movePreview({ 325, 327 });
+    ASSERT_TRUE(Parks::_preview);
+    EXPECT_EQ(Parks::_preview->position, World::Pos2(320, 320));
+    EXPECT_TRUE(Parks::_parks.empty());
+    EXPECT_FALSE(Parks::contains({ 320, 320 }));
+    const auto ground = Parks::_preview->groundImage;
+    ASSERT_NE(Rct2Graphics::get(ground), nullptr);
+    EXPECT_EQ(Rct2Graphics::get(ground)->width, 64);
+    EXPECT_EQ(Rct2Graphics::get(ground)->height, 32);
+    ASSERT_NE(Rct2Graphics::get(ground + 1), nullptr);
+    const auto allocated = Rct2Graphics::_images.size();
+    Parks::movePreview({ 640, 640 });
+    EXPECT_EQ(Rct2Graphics::_images.size(), allocated);
+    Parks::clearPreview();
+    EXPECT_FALSE(Parks::_preview);
+    Parks::movePreview({ 640, 640 });
+    Parks::reset();
+    EXPECT_FALSE(Parks::_preview);
+    EXPECT_FALSE(Parks::_groundImage);
+    EXPECT_EQ(Rct2Graphics::get(ground), nullptr);
 }

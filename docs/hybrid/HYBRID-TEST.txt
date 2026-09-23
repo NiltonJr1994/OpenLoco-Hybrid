@@ -1,4 +1,4 @@
-OpenLoco Hybrid v0.5.0-alpha — native RCT2 vertical slice
+OpenLoco Hybrid v0.5.1-alpha — native RCT2 vertical slice
 
 Extract the complete package into a new folder.
 Copy your RCT2 Data and ObjData folders into RCT2 beside OpenLoco.exe.
@@ -25,3 +25,11 @@ This is a session-only native integration test, not a finished park simulator.
 Parks/objects are not saved yet. Objects are free and limited to nine per park.
 TD6 construction, operational rides and visitors are not implemented.
 See NATIVE-BRIDGE.md for exact boundaries and automated validation details.
+
+V0.5.1 placement fix:
+- The registry, object preview and rejection messages follow the window position.
+- Build park shows a 7x7 garden/path miniature and the real RCT2 entrance under the cursor.
+- A valid site says "Valid 7x7 site"; trees, water, slopes and existing buildings block creation.
+- Clear/level the land first. Failed clicks do not charge construction money.
+- After a successful click the miniature stays on the map and Enter park becomes available.
+- Moving off the map, cancelling, closing the window or loading a map clears the placement preview.
