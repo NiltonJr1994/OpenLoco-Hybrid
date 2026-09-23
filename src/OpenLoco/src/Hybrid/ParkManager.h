@@ -17,7 +17,7 @@
 
 namespace OpenLoco::Hybrid::Parks
 {
-    // v0.4 alpha deliberately uses a low construction charge so a fresh test
+    // This alpha deliberately uses a low construction charge so a fresh test
     // scenario can exercise the complete park flow without taking a large loan.
     // The final balance model will derive land price from the site and era.
     constexpr currency32_t kParkConstructionCost = 5000;

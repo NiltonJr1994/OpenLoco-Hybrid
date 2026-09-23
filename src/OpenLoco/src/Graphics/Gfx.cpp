@@ -1,4 +1,3 @@
-#include "Hybrid/Rct2Graphics.h"
 #include "Graphics/Gfx.h"
 #include "Config.h"
 #include "Environment.h"
@@ -10,6 +9,7 @@
 #include "Graphics/PaletteMap.h"
 #include "Graphics/RenderTarget.h"
 #include "Graphics/SoftwareDrawingEngine.h"
+#include "Hybrid/Rct2Graphics.h"
 #include "Input.h"
 #include "Localisation/Formatting.h"
 #include "Localisation/LanguageFiles.h"
@@ -310,7 +310,10 @@ namespace OpenLoco::Gfx
     G1Element* getG1Element(uint32_t imageId)
     {
         const auto id = getImageIndex(imageId);
-        if (id >= Hybrid::Rct2Graphics::kFirstImage) return Hybrid::Rct2Graphics::get(id);
+        if (id >= Hybrid::Rct2Graphics::kFirstImage)
+        {
+            return Hybrid::Rct2Graphics::get(id);
+        }
         if (id < _g1Elements.size())
         {
             return &_g1Elements[id];

@@ -1,4 +1,3 @@
-#include "Hybrid/ParkManager.h"
 #include "Map/TileManager.h"
 #include "Audio/Audio.h"
 #include "Economy/Economy.h"
@@ -8,6 +7,7 @@
 #include "GameCommands/GameCommands.h"
 #include "GameState.h"
 #include "GameStateFlags.h"
+#include "Hybrid/ParkManager.h"
 #include "Input.h"
 #include "Localisation/FormatArguments.hpp"
 #include "Localisation/StringIds.h"

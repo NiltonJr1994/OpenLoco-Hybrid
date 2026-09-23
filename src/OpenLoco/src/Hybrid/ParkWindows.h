@@ -353,10 +353,10 @@ namespace OpenLoco::Hybrid::ParkWindows
             {
                 if (auto ride = Rct2Assets::selectedRide())
                 {
-                    drawText(tr, 12, 146, "Object " + std::to_string(Rct2Assets::_selectedRide + 1) + "/" + std::to_string(assets.rides.size()) + ": " + ride->name);
+                    drawText(tr, 12, 146, "Object " + std::to_string(Rct2Assets::_selectedRide + 1) + "/" + std::to_string(assets.rides.size()) + ": " + ride->name.substr(0, 46));
                     drawText(tr, 12, 163, "DAT: " + ride->id + "    RCT2 ride type: " + std::to_string(ride->rideTypes[0]));
-                    drawText(tr, 12, 180, ride->description);
-                    drawText(tr, 12, 197, "Capacity definition: " + ride->capacity);
+                    drawText(tr, 12, 180, ride->description.substr(0, 65));
+                    drawText(tr, 12, 197, "Capacity definition: " + ride->capacity.substr(0, 42));
                     drawText(tr, 12, 214, "Decoded definition bytes: " + std::to_string(ride->payload.size()));
                     try
                     {
