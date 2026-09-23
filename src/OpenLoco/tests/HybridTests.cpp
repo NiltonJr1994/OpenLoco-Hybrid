@@ -140,9 +140,7 @@ TEST_F(HybridTest, WindowTextRendersInsideAnOffsetClippedWindow)
     context.pushRenderTarget({});
     context.pushRenderTarget({ pixels.data(), 400, 200, 64, 64, 0 });
     Gfx::TextRenderer renderer(context);
-    Ui::Window window{};
-    window.x = 400;
-    window.y = 200;
+    Ui::Window window({ 400, 200 }, { 64, 64 });
     ParkWindows::drawText(window, renderer, 12, 27, "A");
     context.popRenderTarget();
     *glyph = savedGlyph;
