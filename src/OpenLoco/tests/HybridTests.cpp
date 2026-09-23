@@ -1,6 +1,7 @@
 #include "../src/Hybrid/ParkWindows.h"
 #include <OpenLoco/Graphics/RenderTarget.h>
 #include <OpenLoco/Graphics/SoftwareDrawingContext.h>
+#include <OpenLoco/Localisation/Formatting.h>
 #include <gtest/gtest.h>
 
 using namespace OpenLoco;
@@ -127,6 +128,10 @@ TEST_F(HybridTest, WindowTextRendersInsideAnOffsetClippedWindow)
     // Reproduces the blank window when it is away from the screen origin.
     auto* glyph = Gfx::getG1Element(ImageIds::characters_medium_normal_space + 224 + 'A' - 32);
     const auto savedGlyph = *glyph;
+    auto* textPalette = Gfx::getG1Element(ImageIds::text_palette);
+    const auto savedTextPalette = *textPalette;
+    std::array<uint8_t, 4> textColours{ 10, 10, 10, 0 };
+    textPalette->offset = textColours.data();
     std::array<uint8_t, 4> ink{ 1, 1, 1, 1 };
     glyph->offset = ink.data();
     glyph->width = 2;
@@ -141,9 +146,12 @@ TEST_F(HybridTest, WindowTextRendersInsideAnOffsetClippedWindow)
     context.pushRenderTarget({ pixels.data(), 400, 200, 64, 64, 0 });
     Gfx::TextRenderer renderer(context);
     Ui::Window window({ 400, 200 }, { 64, 64 });
-    ParkWindows::drawText(window, renderer, 12, 27, "A");
+    // Supply the text palette explicitly; unit tests do not load game graphics.
+    const std::string text{ static_cast<char>(ControlCodes::Colour::black), 'A' };
+    ParkWindows::drawText(window, renderer, 12, 27, text);
     context.popRenderTarget();
     *glyph = savedGlyph;
+    *textPalette = savedTextPalette;
     EXPECT_NE(pixels[27 * 64 + 12], 99);
     EXPECT_EQ(pixels[0], 99);
 }
