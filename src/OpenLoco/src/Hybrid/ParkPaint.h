@@ -16,10 +16,10 @@ namespace OpenLoco::Hybrid
                 continue;
             }
             session.setItemType(Ui::ViewportInteraction::InteractionItem::noInteraction);
-            if (dy == 3 && dx >= -1 && dx <= 1)
+            if (dx == 3 && dy >= -1 && dy <= 1)
             {
                 // Three real entrance parts; orientation follows the viewport.
-                const uint32_t part = dx == 0 ? 0 : (dx < 0 ? 1 : 2);
+                const uint32_t part = dy == 0 ? 0 : (dy < 0 ? 1 : 2);
                 session.addToPlotListAsParent(ImageId(park.entranceImage + session.getRotation() * 3 + part), { 16, 16, height }, { 2, 2, height }, { 28, 28, 80 });
             }
             for (size_t i = 0; i < park.rides.size(); ++i)

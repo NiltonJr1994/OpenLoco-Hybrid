@@ -6,6 +6,10 @@ on:
       - hybrid/v0.3-map-integration
   workflow_dispatch:
 
+concurrency:
+  group: hybrid-native-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows-x64:
     name: Hybrid Windows x64
