@@ -7,8 +7,7 @@ namespace OpenLoco::Hybrid
 {
     inline void paintPark(Paint::PaintSession& session, const World::Pos2& loc, coord_t height)
     {
-        const auto paint = [&](const Parks::Park& park)
-        {
+        const auto paint = [&](const Parks::Park& park) {
             const int dx = (loc.x - park.position.x) / 32;
             const int dy = (loc.y - park.position.y) / 32;
             if (std::abs(dx) > 3 || std::abs(dy) > 3)
@@ -38,8 +37,12 @@ namespace OpenLoco::Hybrid
             }
         };
         for (const auto& park : Parks::_parks)
+        {
             paint(park);
+        }
         if (Parks::_preview)
+        {
             paint(*Parks::_preview);
+        }
     }
 }

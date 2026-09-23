@@ -52,7 +52,9 @@ namespace OpenLoco::Hybrid::Rct2Graphics
                 {
                     const int diamond = std::abs(2 * x - 63) + 2 * std::abs(2 * y - 31);
                     if (diamond > 63)
+                    {
                         continue;
+                    }
                     const auto colour = path ? Colour::grey : Colour::mutedGrassGreen;
                     const auto shade = diamond > 57 ? 3 : (path ? 7 : 5);
                     image->pixels[y * 64 + x] = Colours::getShade(colour, shade);

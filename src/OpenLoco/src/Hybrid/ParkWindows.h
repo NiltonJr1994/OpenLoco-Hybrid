@@ -270,6 +270,10 @@ namespace OpenLoco::Hybrid::ParkWindows
             {
                 return;
             }
+            if (ToolManager::isToolActive(self.type, self.number))
+            {
+                ToolManager::toolCancel();
+            }
             Parks::clearPreview();
             Parks::_groundImage.reset();
             Rct2Graphics::reset();
@@ -317,6 +321,10 @@ namespace OpenLoco::Hybrid::ParkWindows
         {
             Parks::clearPreview();
             clearMapSelection();
+            return;
+        }
+        if (Parks::_preview && Parks::_preview->position == Parks::normaliseCentre(*mapPos))
+        {
             return;
         }
         Parks::movePreview(*mapPos);

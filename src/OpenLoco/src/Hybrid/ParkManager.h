@@ -12,8 +12,8 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
-#include <string>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -111,7 +111,9 @@ namespace OpenLoco::Hybrid::Parks
     inline uint32_t groundImage()
     {
         if (!_groundImage)
+        {
             _groundImage = Rct2Graphics::loadGround();
+        }
         return *_groundImage;
     }
 
@@ -134,7 +136,9 @@ namespace OpenLoco::Hybrid::Parks
     {
         const auto centre = normaliseCentre(position);
         if (_preview && _preview->position == centre)
+        {
             return;
+        }
         Park preview;
         preview.position = centre;
         preview.entrance = Rct2Assets::get().entrances.front();
