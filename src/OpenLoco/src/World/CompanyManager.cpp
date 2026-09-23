@@ -11,6 +11,7 @@
 #include "GameCommands/Company/UpdateOwnerStatus.h"
 #include "GameCommands/GameCommands.h"
 #include "GameState.h"
+#include "Hybrid/ParkManager.h"
 #include "GameStateFlags.h"
 #include "Graphics/Colour.h"
 #include "Localisation/FormatArguments.hpp"
@@ -264,6 +265,9 @@ namespace OpenLoco::CompanyManager
         {
             company.updateMonthly1();
         }
+
+        OpenLoco::Hybrid::Parks::updateMonthly();
+
         Ui::WindowManager::invalidate(Ui::WindowType::company);
         Ui::WindowManager::invalidate(Ui::WindowType::companyList);
         Ui::WindowManager::invalidate(Ui::WindowType::companyInfoPanel);

@@ -1,3 +1,4 @@
+#include "Hybrid/ParkManager.h"
 #include "Map/TileManager.h"
 #include "Audio/Audio.h"
 #include "Economy/Economy.h"
@@ -150,6 +151,7 @@ namespace OpenLoco::World::TileManager
 
     static void storeClearAll()
     {
+        Hybrid::Parks::reset();
         tileState().surface.clear();
         tileState().track.clear();
         tileState().station.clear();

@@ -2,6 +2,7 @@
 
 #include "Economy/Expenditures.h"
 #include "Hybrid/Rct2AssetRegistry.h"
+#include "Hybrid/Rct2Graphics.h"
 #include "Map/TileManager.h"
 #include "SceneManager.h"
 #include "World/CompanyManager.h"
@@ -32,7 +33,14 @@ namespace OpenLoco::Hybrid::Parks
         CompanyId owner{ CompanyId::null };
         uint16_t closestTownId{ 0xFFFF };
         bool open{ true };
-        bool detailedParkLaunched{};
+        std::shared_ptr<const Rct2::Definition> entrance;
+        uint32_t entranceImage{};
+        struct RideInstance
+        {
+            std::shared_ptr<const Rct2::Definition> definition;
+            uint32_t image{};
+        };
+        std::vector<RideInstance> rides;
 
         uint16_t popularity{ 550 };
         uint16_t capacity{ 250 };
@@ -50,9 +58,29 @@ namespace OpenLoco::Hybrid::Parks
     inline uint16_t _selectedParkId{};
     inline std::string _lastStatus{ "Hybrid park system ready." };
 
+    inline void reset()
+    {
+        _parks.clear();
+        _nextParkId = 1;
+        _selectedParkId = 0;
+        Rct2Graphics::reset();
+        _lastStatus = "Native parks are session-only in this alpha.";
+    }
+
+    inline bool contains(const World::Pos2& position)
+    {
+        for (const auto& park : _parks)
+        {
+            const int dx = std::abs(static_cast<int>(position.x) - park.position.x);
+            const int dy = std::abs(static_cast<int>(position.y) - park.position.y);
+            if (dx <= kParkFootprintRadius * kTileWorldSize && dy <= kParkFootprintRadius * kTileWorldSize) return true;
+        }
+        return false;
+    }
+
     inline bool hasRct2Assets()
     {
-        return Rct2Assets::ready();
+        return !SceneManager::isNetworked() && !SceneManager::isEditorMode() && Rct2Assets::ready();
     }
 
     inline World::Pos2 normaliseCentre(const World::Pos2& position)
@@ -167,6 +195,13 @@ namespace OpenLoco::Hybrid::Parks
                     return false;
                 }
 
+                const auto* centreSurface = World::TileManager::get(centre).surface();
+                if (surface->slope() != 0 || !centreSurface || surface->baseHeight() != centreSurface->baseHeight())
+                {
+                    reason = "Park site rejected: this slice needs a flat 7x7 site at one height.";
+                    return false;
+                }
+
                 // For this alpha, do not silently bulldoze roads, rails, stations,
                 // buildings, industries or scenery. A park site must be completely
                 // clear. Later builds can offer an explicit clearance cost preview.
@@ -206,6 +241,11 @@ namespace OpenLoco::Hybrid::Parks
 
     inline Park* createPark(const World::Pos2& inputPosition)
     {
+        if (SceneManager::isNetworked() || SceneManager::isEditorMode() || SceneManager::isTitleMode() || _parks.size() >= 64)
+        {
+            _lastStatus = "Native parks require single-player gameplay (maximum 64 parks).";
+            return nullptr;
+        }
         const auto position = normaliseCentre(inputPosition);
         std::string siteError;
         if (!validateParkSite(position, siteError))
@@ -220,6 +260,11 @@ namespace OpenLoco::Hybrid::Parks
             _lastStatus = "No controlling company is available.";
             return nullptr;
         }
+        auto entrance = Rct2Assets::get().entrances.front();
+        uint32_t entranceImage;
+        try { entranceImage = Rct2Graphics::load(entrance); }
+        catch (const std::exception& e) { _lastStatus = e.what(); return nullptr; }
+        _parks.reserve(_parks.size() + 1);
         if (!pay(owner, kParkConstructionCost, ExpenditureType::Construction, position))
         {
             return nullptr;
@@ -229,59 +274,34 @@ namespace OpenLoco::Hybrid::Parks
         park.id = _nextParkId++;
         park.position = position;
         park.owner = owner;
+        park.entrance = entrance;
+        park.entranceImage = entranceImage;
         refreshClosestTown(park);
 
-        _parks.push_back(park);
+        _parks.push_back(std::move(park));
+        Gfx::invalidateScreen();
         _selectedParkId = park.id;
-        _lastStatus = "Regional park created. Use ENTER PARK to open the real RCT2 detailed park layer.";
+        _lastStatus = "Park created with a native RCT2 entrance. Enter park to browse real objects.";
         return &_parks.back();
     }
 
-    inline uint32_t estimateMonthlyVisitors(const Park& park)
+    inline bool instantiateSelectedRide()
     {
-        if (!park.open || !park.detailedParkLaunched)
+        auto* park = selectedPark();
+        auto definition = Rct2Assets::selectedRide();
+        if (!park || !definition || SceneManager::isNetworked() || park->owner != CompanyManager::getControllingId()) return false;
+        if (park->rides.size() >= 9) { _lastStatus = "This native slice supports nine object instances per park."; return false; }
+        try
         {
-            return 0;
+            const auto image = Rct2Graphics::load(definition);
+            park->rides.push_back({ definition, image });
+            _lastStatus = "Instantiated " + definition->id + " in park #" + std::to_string(park->id);
+            Gfx::invalidateScreen();
+            return true;
         }
-        const uint64_t population = closestTownPopulation(park);
-        if (population == 0)
-        {
-            return 0;
-        }
-
-        // Temporary regional placeholder until OpenRCT2 park statistics are
-        // synchronised back through the Hybrid sidecar bridge.
-        uint64_t visitors = population * 4 / 100;
-        visitors = visitors * park.popularity / 1000;
-        const int32_t priceDemandPercent = std::clamp<int32_t>(120 - park.ticketPrice, 25, 120);
-        visitors = visitors * priceDemandPercent / 100;
-        return static_cast<uint32_t>(std::min<uint64_t>(visitors, static_cast<uint64_t>(park.capacity) * 30));
+        catch (const std::exception& e) { _lastStatus = e.what(); return false; }
     }
 
-    inline void updateMonthly()
-    {
-        if (SceneManager::isEditorMode() || SceneManager::isTitleMode() || SceneManager::isNetworked())
-        {
-            return;
-        }
-
-        for (auto& park : _parks)
-        {
-            if (!park.open || !park.detailedParkLaunched)
-            {
-                continue;
-            }
-
-            refreshClosestTown(park);
-            const auto visitors = estimateMonthlyVisitors(park);
-            park.visitorsLastMonth = visitors;
-            park.lifetimeVisitors += visitors;
-
-            park.lastRevenue = static_cast<currency32_t>(visitors) * park.ticketPrice;
-            park.lastTax = static_cast<currency32_t>(500 + park.capacity / 10);
-            park.lastOperatingCost = static_cast<currency32_t>(900 + visitors);
-            park.lastProfit = park.lastRevenue - park.lastTax - park.lastOperatingCost;
-            CompanyManager::applyPaymentToCompany(park.owner, -park.lastProfit, ExpenditureType::Miscellaneous);
-        }
-    }
+    // No fabricated visitor revenue: operational simulation is outside this slice.
+    inline void updateMonthly() {}
 }

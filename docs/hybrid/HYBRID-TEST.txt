@@ -1,0 +1,27 @@
+OpenLoco Hybrid v0.5.0-alpha — native RCT2 vertical slice
+
+Extract the complete package into a new folder.
+Copy your RCT2 Data and ObjData folders into RCT2 beside OpenLoco.exe.
+Keep Locomotion's ObjData separate, including all your vehicle mods.
+No OpenRCT2 executable is required or included.
+
+1. Start OpenLoco.exe with your normal Locomotion assets and load a scenario.
+2. Open Towns/Industries -> Parks (Hybrid).
+3. Confirm decoded rides/entrances; the provided GOG installation has 267/16.
+4. Build park: choose flat, clear, dry 7x7 land within 48 tiles of a town.
+   The construction cost is 5,000. Invalid placement reports a reason.
+5. Confirm the real RCT2 entrance is visible on the map after closing the window.
+   Rotate and zoom the map, and reopen Parks (Hybrid).
+6. Enter park: the window becomes a native object browser inside OpenLoco.
+7. Browse with < Object / Object >. Confirm DAT name, properties and real preview.
+8. Add object. Confirm the instance count and last object's name change and its
+   visual proxy appears inside the 7x7 footprint. Repeat with another definition.
+9. Check Task Manager: this flow must never start OpenRCT2 or any other game.
+10. Build a second park; Previous park must retain each park's own instances.
+11. Try building a road on the park; shared construction clearance must reject it.
+12. Load another scenario: old parks/proxies must disappear.
+
+This is a session-only native integration test, not a finished park simulator.
+Parks/objects are not saved yet. Objects are free and limited to nine per park.
+TD6 construction, operational rides and visitors are not implemented.
+See NATIVE-BRIDGE.md for exact boundaries and automated validation details.

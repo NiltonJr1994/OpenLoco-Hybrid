@@ -1,3 +1,4 @@
+#include "Hybrid/ParkManager.h"
 #define DO_TITLE_SEQUENCE_CHECKS
 
 #include "S5/S5.h"
@@ -875,6 +876,7 @@ namespace OpenLoco::S5
 
             // Copy the S5 gamestate contents to the destination gamestate, field by field
             auto& src = file->gameState;
+            Hybrid::Parks::reset();
             dst = *importGameState(src);
 
             // Copy scenario options

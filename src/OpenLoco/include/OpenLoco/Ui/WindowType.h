@@ -70,6 +70,7 @@ namespace OpenLoco::Ui
         objectLoadError = 60,
 
         debug = 61,
+        hybridParks = 62,
 
         undefined = 255
     };

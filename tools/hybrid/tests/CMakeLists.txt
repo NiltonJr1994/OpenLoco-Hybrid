@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+project(HybridReaderTests LANGUAGES CXX)
+enable_testing()
+add_executable(hybrid-reader-tests ReaderTests.cpp)
+target_compile_features(hybrid-reader-tests PRIVATE cxx_std_20)
+add_test(NAME native-rct2-reader COMMAND hybrid-reader-tests)

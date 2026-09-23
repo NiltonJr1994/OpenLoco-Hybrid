@@ -1,3 +1,4 @@
+#include "Hybrid/ParkManager.h"
 #include "Paint/Paint.h"
 #include "Config.h"
 #include "Game.h"
@@ -134,6 +135,7 @@ namespace OpenLoco::Paint
             }
         }
         _maxHeight = (maxClearZ * World::kSmallZStep) + 32;
+        if (Hybrid::Parks::contains(loc)) _maxHeight += 160;
     }
 
     /*

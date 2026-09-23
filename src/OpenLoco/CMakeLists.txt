@@ -1,4 +1,10 @@
 set(OLOCO_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/ParkManager.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/ParkWindows.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/ParkPaint.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/Rct2Reader.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/Rct2AssetRegistry.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/Rct2Graphics.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/AmbientAudio.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/Audio.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Audio/Music.cpp"

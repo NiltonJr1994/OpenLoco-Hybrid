@@ -5,7 +5,6 @@
 #include "Graphics/TextRenderer.h"
 #include "Hybrid/ParkManager.h"
 #include "Hybrid/Rct2AssetRegistry.h"
-#include "Hybrid/Rct2Bridge.h"
 #include "Input.h"
 #include "Localisation/StringIds.h"
 #include "Localisation/StringManager.h"
@@ -30,7 +29,8 @@ namespace OpenLoco::Hybrid::ParkWindows
 {
     using namespace OpenLoco::Ui;
 
-    static constexpr auto kParkListWindowType = static_cast<Ui::WindowType>(62);
+    static constexpr auto kParkListWindowType = Ui::WindowType::hybridParks;
+    inline bool _insidePark = false;
 
     static constexpr StringId kStringMenuParks = 2468;
     static constexpr StringId kStringTitleParks = 2469;
@@ -45,11 +45,15 @@ namespace OpenLoco::Hybrid::ParkWindows
     inline constexpr char kBuildParkText[] = "Build park";
     inline constexpr char kEnterParkText[] = "Enter park";
     inline constexpr char kRescanRct2Text[] = "Rescan RCT2";
-    inline constexpr char kPreviousTemplateText[] = "< Template";
-    inline constexpr char kNextTemplateText[] = "Template >";
+    inline constexpr char kPreviousTemplateText[] = "< Object";
+    inline constexpr char kNextTemplateText[] = "Object >";
 
+    static constexpr StringId kStringInstantiate = 2475;
+    static constexpr StringId kStringPreviousPark = 2476;
     inline void installStrings()
     {
+        StringManager::swapString(kStringInstantiate, "Add object");
+        StringManager::swapString(kStringPreviousPark, "Previous park");
         StringManager::swapString(kStringMenuParks, kMenuParksText);
         StringManager::swapString(kStringTitleParks, kTitleParksText);
         StringManager::swapString(kStringBuildPark, kBuildParkText);
@@ -61,6 +65,8 @@ namespace OpenLoco::Hybrid::ParkWindows
 
     namespace Widx
     {
+        constexpr WidgetId instantiate{ "hybrid_instantiate" };
+        constexpr WidgetId previousPark{ "hybrid_previous_park" };
         constexpr WidgetId close{ "hybrid_park_close" };
         constexpr WidgetId panel{ "hybrid_park_panel" };
         constexpr WidgetId buildPark{ "hybrid_park_build" };
@@ -83,7 +89,7 @@ namespace OpenLoco::Hybrid::ParkWindows
         nextTemplate,
     };
 
-    static constexpr Ui::Size kWindowSize = { 570, 345 };
+    static constexpr Ui::Size kWindowSize = { 570, 390 };
 
     static constexpr auto kWidgets = makeWidgets(
         Widgets::Frame({ 0, 0 }, kWindowSize, WindowColour::primary),
@@ -94,7 +100,9 @@ namespace OpenLoco::Hybrid::ParkWindows
         Widgets::Button(Widx::enterPark, { 125, 304 }, { 105, 24 }, WindowColour::secondary, kStringEnterPark),
         Widgets::Button(Widx::rescanRct2, { 238, 304 }, { 105, 24 }, WindowColour::secondary, kStringRescanRct2),
         Widgets::Button(Widx::previousTemplate, { 351, 304 }, { 100, 24 }, WindowColour::secondary, kStringPreviousTemplate),
-        Widgets::Button(Widx::nextTemplate, { 459, 304 }, { 100, 24 }, WindowColour::secondary, kStringNextTemplate));
+        Widgets::Button(Widx::nextTemplate, { 459, 304 }, { 100, 24 }, WindowColour::secondary, kStringNextTemplate),
+        Widgets::Button(Widx::instantiate, { 12, 338 }, { 160, 24 }, WindowColour::secondary, kStringInstantiate),
+        Widgets::Button(Widx::previousPark, { 184, 338 }, { 160, 24 }, WindowColour::secondary, kStringPreviousPark));
 
     inline Widget* findWidget(Window& window, const WidgetId id)
     {
@@ -110,7 +118,8 @@ namespace OpenLoco::Hybrid::ParkWindows
 
     inline void drawText(Gfx::TextRenderer& tr, int16_t x, int16_t y, const std::string& text)
     {
-        tr.drawString({ x, y }, Colour::black, text.c_str());
+        const auto clipped = text.substr(0, 84);
+        tr.drawString({ x, y }, Colour::black, clipped.c_str());
     }
 
     inline void clearMapSelection()
@@ -166,7 +175,11 @@ namespace OpenLoco::Hybrid::ParkWindows
 
     inline void prepareDraw(Ui::Window& self)
     {
-        const bool assetsReady = Rct2Assets::ready();
+        if (Parks::selectedPark() == nullptr) _insidePark = false;
+        const bool assetsReady = Parks::hasRct2Assets();
+        if (auto* w = findWidget(self, Widx::instantiate)) w->disabled = !_insidePark || !Rct2Assets::selectedRide() || !Parks::selectedPark() || Parks::selectedPark()->rides.size() >= 9;
+        if (auto* w = findWidget(self, Widx::previousPark)) w->disabled = Parks::_parks.size() < 2;
+        if (auto* w = findWidget(self, Widx::rescanRct2)) w->disabled = !Parks::_parks.empty();
         const bool hasPark = Parks::selectedPark() != nullptr;
 
         if (auto* w = findWidget(self, Widx::buildPark); w != nullptr)
@@ -175,15 +188,15 @@ namespace OpenLoco::Hybrid::ParkWindows
         }
         if (auto* w = findWidget(self, Widx::enterPark); w != nullptr)
         {
-            w->disabled = !hasPark || !assetsReady || !Rct2Bridge::runtimeAvailable();
+            w->disabled = !hasPark;
         }
         if (auto* w = findWidget(self, Widx::previousTemplate); w != nullptr)
         {
-            w->disabled = Rct2Assets::get().scenarios.size() < 2;
+            w->disabled = !_insidePark || Rct2Assets::get().rides.size() < 2;
         }
         if (auto* w = findWidget(self, Widx::nextTemplate); w != nullptr)
         {
-            w->disabled = Rct2Assets::get().scenarios.size() < 2;
+            w->disabled = !_insidePark || Rct2Assets::get().rides.size() < 2;
         }
     }
 
@@ -204,6 +217,19 @@ namespace OpenLoco::Hybrid::ParkWindows
             WindowManager::close(&self);
             return;
         }
+        if (id == Widx::instantiate)
+        {
+            if (_insidePark) Parks::instantiateSelectedRide();
+            self.invalidate();
+            return;
+        }
+        if (id == Widx::previousPark)
+        {
+            selectPreviousPark();
+            if (auto* p = Parks::selectedPark()) selectParkFootprint(p->position);
+            self.invalidate();
+            return;
+        }
         if (id == Widx::buildPark)
         {
             beginPlacement(self);
@@ -211,6 +237,8 @@ namespace OpenLoco::Hybrid::ParkWindows
         }
         if (id == Widx::rescanRct2)
         {
+            if (!Parks::_parks.empty()) return;
+            Rct2Graphics::reset();
             Rct2Assets::scan();
             Parks::_lastStatus = Rct2Assets::get().status;
             self.invalidate();
@@ -218,15 +246,15 @@ namespace OpenLoco::Hybrid::ParkWindows
         }
         if (id == Widx::previousTemplate)
         {
-            Rct2Assets::selectPreviousScenario();
-            Parks::_lastStatus = "Previous RCT2 scenario template selected.";
+            Rct2Assets::selectRide(-1);
+            Parks::_lastStatus = "Previous native RCT2 object selected.";
             self.invalidate();
             return;
         }
         if (id == Widx::nextTemplate)
         {
-            Rct2Assets::selectNextScenario();
-            Parks::_lastStatus = "Next RCT2 scenario template selected.";
+            Rct2Assets::selectRide(1);
+            Parks::_lastStatus = "Next native RCT2 object selected.";
             self.invalidate();
             return;
         }
@@ -234,15 +262,8 @@ namespace OpenLoco::Hybrid::ParkWindows
         {
             if (auto* park = Parks::selectedPark(); park != nullptr)
             {
-                if (Rct2Bridge::launchDetailedPark(park->id))
-                {
-                    park->detailedParkLaunched = true;
-                    Parks::_lastStatus = Rct2Bridge::_lastStatus;
-                }
-                else
-                {
-                    Parks::_lastStatus = Rct2Bridge::_lastStatus;
-                }
+                _insidePark = true;
+                Parks::_lastStatus = "Browse RCT2 definitions, then Add object to this park.";
                 self.invalidate();
             }
         }
@@ -299,38 +320,42 @@ namespace OpenLoco::Hybrid::ParkWindows
         auto tr = Gfx::TextRenderer(drawingCtx);
         const auto& assets = Rct2Assets::get();
 
-        drawText(tr, 12, 27, "OpenLoco Hybrid v0.4.0-alpha - RCT2 bridge diagnostics");
-        drawText(tr, 12, 47, std::string("RCT2 registry: ") + (assets.ready ? "READY" : "NOT READY"));
-        drawText(tr, 12, 64, "Data files: " + std::to_string(assets.dataFiles) + "    ObjData: " + std::to_string(assets.objectFiles));
-        drawText(tr, 12, 81, "Rides/shops: " + std::to_string(assets.objectTypes[0]) + "    Small scenery: " + std::to_string(assets.objectTypes[1]) + "    Large scenery: " + std::to_string(assets.objectTypes[2]));
-        drawText(tr, 12, 98, "Walls: " + std::to_string(assets.objectTypes[3]) + "    Park entrances: " + std::to_string(assets.objectTypes[8]));
-        drawText(tr, 12, 115, "Track designs (.TD6): " + std::to_string(assets.trackDesignFiles) + "    Scenarios (.SC6): " + std::to_string(assets.scenarioFiles) + "    Saved parks: " + std::to_string(assets.savedParkFiles));
-        drawText(tr, 12, 132, std::string("OpenRCT2 runtime: ") + (Rct2Bridge::runtimeAvailable() ? "READY" : "MISSING"));
-
-        if (const auto* scenario = Rct2Assets::selectedScenario(); scenario != nullptr)
+        drawText(tr, 12, 27, "OpenLoco Hybrid v0.5.0-alpha - Native RCT2 assets");
+        drawText(tr, 12, 47, std::string("Decoded registry: ") + (assets.ready ? "READY" : "NOT READY"));
+        drawText(tr, 12, 64, "Rides/shops: " + std::to_string(assets.rides.size()) + "    Entrances: " + std::to_string(assets.entrances.size()));
+        drawText(tr, 12, 81, "Unsupported classes: " + std::to_string(assets.unsupported) + "    Rejected files: " + std::to_string(assets.rejected));
+        if (auto* park = Parks::selectedPark())
         {
-            drawText(tr, 12, 155, "Detailed-park template: " + scenario->filename().string());
+            drawText(tr, 12, 103, "Park #" + std::to_string(park->id) + "    7x7 tiles    Objects: " + std::to_string(park->rides.size()) + "/9");
+            drawText(tr, 12, 120, "Entrance: " + park->entrance->name + " [" + park->entrance->id + "]");
+            if (_insidePark)
+            {
+                if (auto ride = Rct2Assets::selectedRide())
+                {
+                    drawText(tr, 12, 146, "Object " + std::to_string(Rct2Assets::_selectedRide + 1) + "/" + std::to_string(assets.rides.size()) + ": " + ride->name);
+                    drawText(tr, 12, 163, "DAT: " + ride->id + "    RCT2 ride type: " + std::to_string(ride->rideTypes[0]));
+                    drawText(tr, 12, 180, ride->description);
+                    drawText(tr, 12, 197, "Capacity definition: " + ride->capacity);
+                    drawText(tr, 12, 214, "Decoded definition bytes: " + std::to_string(ride->payload.size()));
+                    try
+                    {
+                        const auto image = Rct2Graphics::load(ride);
+                        drawingCtx.drawImage(ZoomLevel::full, 495, 190, ImageId(image));
+                    }
+                    catch (const std::exception& e) { Parks::_lastStatus = e.what(); }
+                }
+            }
+            else drawText(tr, 12, 146, "Enter park opens the native object browser here.");
+            if (!park->rides.empty()) drawText(tr, 12, 234, "Last instance: " + park->rides.back().definition->name);
         }
         else
         {
-            drawText(tr, 12, 155, "Detailed-park template: none");
+            drawText(tr, 12, 110, "Build park: select a clear, flat 7x7 site within 48 tiles of a town.");
+            drawText(tr, 12, 130, "Construction charge: 5,000. Native object instances are free in this alpha.");
         }
-
-        if (auto* park = Parks::selectedPark(); park != nullptr)
-        {
-            drawText(tr, 12, 183, "Adventure Park #" + std::to_string(park->id) + "    Regional footprint: 7x7 tiles");
-            drawText(tr, 12, 200, "Centre X " + std::to_string(park->position.x) + "  Y " + std::to_string(park->position.y) + "    Closest town population: " + std::to_string(Parks::closestTownPopulation(*park)));
-            drawText(tr, 12, 217, std::string("Detailed park layer: ") + (park->detailedParkLaunched ? "launched" : "not launched yet"));
-        }
-        else
-        {
-            drawText(tr, 12, 183, "No regional park exists yet. BUILD PARK reserves a clear 7x7 site near a town.");
-            drawText(tr, 12, 200, "Hybrid alpha construction charge: 5,000. Obstacles are never silently bulldozed.");
-        }
-
-        drawText(tr, 12, 242, "Status: " + Parks::_lastStatus);
-        drawText(tr, 12, 261, "ENTER PARK uses the real OpenRCT2 engine and your RCT2 ObjData/Tracks/Scenarios.");
-        drawText(tr, 12, 278, "TD6 designs remain in RCT2\\Tracks; OpenRCT2 indexes that directory through --rct2-data-path.");
+        drawText(tr, 12, 259, "Status: " + Parks::_lastStatus);
+        drawText(tr, 12, 280, "Session-only: parks are not saved. TD6 and ride simulation are not implemented.");
+        drawText(tr, 12, 372, "RCT2 ObjData remains isolated from all Locomotion objects and mods.");
     }
 
     inline constexpr WindowEventList kEvents = {
@@ -347,6 +372,7 @@ namespace OpenLoco::Hybrid::ParkWindows
     {
         installStrings();
         Rct2Assets::get();
+        if (SceneManager::isNetworked() || SceneManager::isEditorMode()) return nullptr;
 
         auto* window = WindowManager::bringToFront(kParkListWindowType, 0);
         if (window == nullptr)

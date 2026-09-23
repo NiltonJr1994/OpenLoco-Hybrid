@@ -1,3 +1,4 @@
+#include "Hybrid/ParkPaint.h"
 #include "Paint/PaintTile.h"
 #include "Graphics/Colour.h"
 #include "Graphics/ImageIds.h"
@@ -317,6 +318,7 @@ namespace OpenLoco::Paint
                 {
                     auto& elSurface = el.get<World::SurfaceElement>();
                     paintSurface(session, elSurface);
+                    Hybrid::paintPark(session, loc, elSurface.baseHeight());
                     break;
                 }
                 case World::ElementType::track:
