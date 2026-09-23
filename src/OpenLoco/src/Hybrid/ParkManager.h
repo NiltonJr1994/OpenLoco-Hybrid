@@ -300,7 +300,7 @@ namespace OpenLoco::Hybrid::Parks
     {
         auto* park = selectedPark();
         auto definition = Rct2Assets::selectedRide();
-        if (!park || !definition || SceneManager::isNetworked() || park->owner != CompanyManager::getControllingId())
+        if (!park || !definition || SceneManager::isNetworked() || SceneManager::isEditorMode() || SceneManager::isTitleMode() || park->owner != CompanyManager::getControllingId())
         {
             return false;
         }

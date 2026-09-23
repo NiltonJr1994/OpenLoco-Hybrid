@@ -51,6 +51,9 @@ out-of-range runs/backreferences and deterministic malformed-file mutations.
 An optional argument points it at a locally owned RCT2 installation for a real
 asset sweep; these proprietary assets are never uploaded to CI.
 
+OpenLoco integration tests also exercise native sprite rendering, transparency,
+image-slot isolation, per-park instances, ownership, capacity and reset behavior.
+
 The Windows workflow runs these tests, builds OpenLoco, checks the PE architecture
 and native markers, rejects launcher strings and external runtime files, then
 packages a ZIP and SHA-256. Binary markers alone are not gameplay validation.

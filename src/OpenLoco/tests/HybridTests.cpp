@@ -72,6 +72,7 @@ TEST_F(HybridTest, NativeImageRangeRendersWithTransparencyAndLeavesLocoSlotUntou
     std::array<uint8_t, 16> pixels;
     pixels.fill(7);
     Gfx::SoftwareDrawingContext context;
+    context.pushRenderTarget({}); // preserve the context base frame in debug builds
     context.pushRenderTarget({ pixels.data(), 0, 0, 4, 4, 0 });
     context.drawImage(ZoomLevel::full, { 1, 1 }, ImageId(id));
     context.popRenderTarget();
