@@ -4,6 +4,8 @@
 #include <OpenLoco/Graphics/RenderTarget.h>
 #include <OpenLoco/Graphics/SoftwareDrawingContext.h>
 #include <OpenLoco/Localisation/Formatting.h>
+#include <chrono>
+#include <fstream>
 #include <gtest/gtest.h>
 
 using namespace OpenLoco;
@@ -485,4 +487,32 @@ TEST_F(HybridMapTest, SidecarRebuildsSpritesAfterResetWithoutChargingCompany)
     Parks::updateMonthly();
     EXPECT_EQ(company->cash.asInt64(), cash);
     EXPECT_EQ(Parks::_nextParkId, 2);
+}
+
+TEST_F(HybridTest, SidecarFileIsBoundToBaseSaveAndCanBeReplaced)
+{
+    const auto folder = std::filesystem::temp_directory_path() / ("openloco-hybrid-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    ASSERT_TRUE(std::filesystem::create_directory(folder));
+    const auto base = folder / "test.SV5";
+    {
+        std::ofstream stream(base);
+        stream << "save one";
+    }
+    EXPECT_TRUE(ParkPersistence::read(base).empty());
+    ParkPersistence::save(base);
+    EXPECT_TRUE(std::filesystem::exists(ParkPersistence::sidecarPath(base)));
+    EXPECT_TRUE(ParkPersistence::read(base).empty());
+    {
+        std::ofstream stream(base);
+        stream << "save two";
+    }
+    EXPECT_THROW(ParkPersistence::read(base), std::runtime_error);
+    ParkPersistence::save(base);
+    EXPECT_TRUE(ParkPersistence::read(base).empty());
+    std::filesystem::remove(base);
+    std::filesystem::remove(ParkPersistence::sidecarPath(base));
+    auto backup = ParkPersistence::sidecarPath(base);
+    backup += ".bak";
+    std::filesystem::remove(backup);
+    std::filesystem::remove(folder);
 }

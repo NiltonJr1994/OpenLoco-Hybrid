@@ -310,7 +310,14 @@ namespace OpenLoco::Hybrid::ParkPersistence
     void reportError(const std::exception& error)
     {
         Diagnostics::Logging::error("Hybrid save/load failed: {}", error.what());
-        Parks::_lastStatus = error.what();
+        Parks::_lastStatus = std::string(error.what()).substr(0, 200);
+        for (auto& c : Parks::_lastStatus)
+        {
+            if (static_cast<unsigned char>(c) < 32 || static_cast<unsigned char>(c) > 126)
+            {
+                c = '?';
+            }
+        }
         StringManager::swapString(2486, Parks::_lastStatus.c_str());
         Ui::Windows::Error::open(StringIds::error_file_contains_invalid_data, 2486);
     }

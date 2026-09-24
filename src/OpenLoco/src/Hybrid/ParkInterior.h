@@ -235,13 +235,16 @@ namespace OpenLoco::Hybrid::ParkInterior
             }
             // Real three-part RCT2 entrance at its original sprite scale.
             const auto entrance = Rct2Graphics::load(park->entrance);
-            for (int part = 1; part >= 0; --part)
-            {
-                ctx.drawImage(ZoomLevel::full, project({ 11, static_cast<coord_t>(part == 1 ? 5 : 6) }), ImageId(entrance + part));
-            }
-            ctx.drawImage(ZoomLevel::full, project({ 11, 7 }), ImageId(entrance + 2));
             for (int sum = 0; sum <= 22; ++sum)
             {
+                for (int part : { 1, 0, 2 })
+                {
+                    const coord_t y = part == 1 ? 5 : (part == 0 ? 6 : 7);
+                    if (11 + y == sum)
+                    {
+                        ctx.drawImage(ZoomLevel::full, project({ 11, y }), ImageId(entrance + part));
+                    }
+                }
                 for (const auto& object : park->scenery)
                 {
                     if (object.tile.x + object.tile.y == sum)
