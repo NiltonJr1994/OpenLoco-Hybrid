@@ -16,7 +16,7 @@ namespace OpenLoco::Hybrid
             }
             const auto height = park.height;
             session.setItemType(Ui::ViewportInteraction::InteractionItem::noInteraction);
-            const bool path = dx == 0 || dy == 0 || std::abs(dx) == 3 || std::abs(dy) == 3;
+            const bool path = dy == 0 || (dx == 0 && dy >= -2 && dy <= 2);
             session.addToPlotListAsParent(ImageId(park.groundImage + (path ? 1 : 0)), { 16, 16, static_cast<coord_t>(height + 1) }, { 0, 0, static_cast<coord_t>(height + 1) }, { 32, 32, 1 });
             const auto view = (session.getRotation() + park.rotation) & 3;
             if (dx == 3 && dy == 0)

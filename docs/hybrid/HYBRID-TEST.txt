@@ -1,24 +1,15 @@
-OpenLoco Hybrid v0.6.0-alpha - native park construction test
+OpenLoco Hybrid v0.7.0-alpha - first interior editor
 
-Extract into a new folder. Copy your RCT2 Data and ObjData directories into RCT2 beside OpenLoco.exe. Keep Locomotion ObjData separate.
+Extract into a NEW folder. Copy your RCT2 Data and ObjData into RCT2 beside OpenLoco.exe. Keep Locomotion ObjData separate.
 
-Start a single-player scenario and create a company. Open Towns/Industries > Parks (Hybrid).
+1. Start a single-player company, open Parks (Hybrid), select a regional model, Build park and Rotate gate. The entrance must touch a ground-level road. Check the quote before clicking.
+2. Enter park opens a separate native INTERIOR window in the same executable.
+3. Browse real RCT2 Scenery, rotate it and click grass in the independent 12x12 interior. Occupied cells and paths reject construction. Your company pays the displayed construction price once.
+4. Build / Remove switches to removal (no refund). Close/reopen the interior: placement remains.
+5. Save normally. Keep BOTH YourSave.SV5 and YourSave.SV5.olh. Reload and check regional parks, interior objects, ownership and financial counters. Loading must not charge construction again.
+6. Corrupt/mismatched companions or missing required DATs must produce a visible error. Ordinary saves without a companion still load.
+7. Existing monthly park tax/upkeep uses company Miscellaneous expenses and native inflation. No visitor revenue is generated yet.
 
-1. Confirm the window shows its version, registry status, model and prices. Drag the window: text must remain inside it.
-2. Choose Classic Fair, Coaster Park or Family Gardens using Park model buttons.
-3. Click Build park. Rotate gate chooses one of four entrance sides. The construction arrow marks the gate side even when the site is invalid.
-4. Choose a 7x7 area near town. A ground-level road must touch the centre tile immediately outside the chosen entrance edge.
-5. The full miniature appears ONLY at a valid site. Water, large slopes, industry land, roads/rails/buildings inside the footprint, bridges as access and other parks are rejected with a reason.
-6. Trees are quoted for removal. Small height differences are quoted for levelling. Check the total BEFORE left-clicking. Insufficient funds must leave the terrain and cash unchanged.
-7. Left-click once. The park stays, the quote is deducted once, the entrance is compact, and Enter park becomes available. Clicking the same site again must not double-charge.
-8. Rotate the map and inspect the model. Ferris wheel, carousel, coaster train and slide have native miniature animations. Pause the game: animation pauses too. These are visual models linked to real RCT2 definitions, not the full RCT2 simulation.
-9. Enter park lists real objects. Browse/Add object updates its object count and monthly cost.
-10. Advance to the next month. Tax and upkeep debit the owning company's Miscellaneous expenses. No monthly charge occurs merely for previewing or cancelling.
+LIMITS: this is an interior scenery editor, not a complete RCT2 simulation. Real static scenery and entrance sprites are rendered. Regional ride miniatures remain visual proxies. Paths are fixed. No visitors, operational rides/shops, TD6, SC6/SV6 import, transport destinations or park AI yet. Unsupported scenery animation/glass/overlay types are excluded. One object reserves a whole interior tile.
 
-FINANCE (1900 base units, adjusted by the game's native inflation):
-Construction: Classic Fair 5000, Coaster Park 6500, Family Gardens 4500, plus native tree clearance/land levelling costs.
-Monthly park tax: 2 per occupied tile (49 tiles) + 5 per object.
-Monthly upkeep: 60 per park + 10 per object.
-Tax uses construction inflation index 8; upkeep uses index 0. Charges use the same monthly company-payment path as vehicles; no automatic revenue is fabricated.
-
-LIMITS: parks and their finances are session-only and are not saved in S5. No TD6 layout construction, visitors or operational RCT2 ride simulation. Terrain levelling is limited to 16 world-height units to avoid cutting large hills. Do not save/reload expecting Hybrid parks to persist.
+Small-scenery legacy price units map to Hybrid construction base units, adjusted by native inflation. Monthly tax: 98 + 5 per regional ride definition. Upkeep: 60 + 10 per regional ride definition (1900 base). Interior scenery has construction cost but no simulated operation.

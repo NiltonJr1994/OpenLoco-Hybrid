@@ -59,6 +59,15 @@ namespace OpenLoco::Hybrid::Parks
             World::Pos2 site{}; // tile offset from park centre, rotated with park
         };
         std::vector<RideInstance> rides;
+        struct SceneryInstance
+        {
+            std::shared_ptr<const Rct2::Definition> definition;
+            World::Pos2 tile{}; // Independent 12x12 interior, never regional coordinates.
+            uint8_t rotation{};
+            uint32_t image{};
+        };
+        std::vector<SceneryInstance> scenery;
+        currency32_t paidInterior{};
         currency32_t paidConstruction{}, lastTax{}, lastOperatingCost{};
         uint32_t lastChargedMonth{};
     };
@@ -145,7 +154,7 @@ namespace OpenLoco::Hybrid::Parks
         _model = 0;
         _animationTicks = 0;
         _quote = {};
-        _lastStatus = "Parks are session-only in this alpha.";
+        _lastStatus = "Build a park or load a save with its .olh companion.";
     }
     inline uint32_t groundImage()
     {

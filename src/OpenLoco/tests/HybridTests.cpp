@@ -1,3 +1,4 @@
+#include "../src/Hybrid/ParkPersistence.h"
 #include "../src/Hybrid/ParkWindows.h"
 #include <OpenLoco/GameState.h>
 #include <OpenLoco/Graphics/RenderTarget.h>
@@ -376,4 +377,88 @@ TEST_F(HybridMapTest, EveryModelHasRealDefinitionsSmallGatesAndChangingAnimation
     Parks::reset();
     EXPECT_TRUE(ParkVisuals::_models.empty());
     EXPECT_FALSE(Parks::_groundImage);
+}
+
+TEST_F(HybridMapTest, InteriorPlacementUsesIndependentCoordinatesAndChargesOnlyOnSuccess)
+{
+    Parks::Park park;
+    park.owner = CompanyId(0);
+    auto d = std::make_shared<Rct2::Definition>(*definition);
+    d->type = 1;
+    d->sceneryPrice = 20;
+    d->sprites.resize(4, d->sprites[0]);
+    const auto cash = CompanyManager::get(park.owner)->cash.asInt64();
+    EXPECT_FALSE(ParkInterior::place(park, d, { 3, 6 }, 0)); // keep paths clear
+    EXPECT_TRUE(ParkInterior::place(park, d, { 3, 4 }, 2));
+    ASSERT_EQ(park.scenery.size(), 1u);
+    EXPECT_EQ(park.scenery[0].tile, World::Pos2(3, 4));
+    EXPECT_EQ(park.scenery[0].rotation, 2);
+    EXPECT_EQ(CompanyManager::get(park.owner)->cash.asInt64(), cash - 20);
+    EXPECT_FALSE(ParkInterior::place(park, d, { 3, 4 }, 0));
+    EXPECT_EQ(CompanyManager::get(park.owner)->cash.asInt64(), cash - 20);
+    CompanyManager::get(park.owner)->cash = currency48_t(0);
+    CompanyManager::get(park.owner)->currentLoan = 0;
+    EXPECT_FALSE(ParkInterior::place(park, d, { 4, 4 }, 0));
+    EXPECT_EQ(park.scenery.size(), 1u);
+    CompanyManager::setControllingId(CompanyId(1));
+    EXPECT_FALSE(ParkInterior::place(park, d, { 4, 4 }, 0));
+}
+
+TEST(HybridInterior, PickingRoundTripsEveryInteriorTileAndRejectsOutside)
+{
+    for (coord_t x = 0; x < 12; ++x)
+    {
+        for (coord_t y = 0; y < 12; ++y)
+        {
+            const auto p = ParkInterior::project({ x, y });
+            const auto tile = ParkInterior::pick(p.x, p.y);
+            ASSERT_TRUE(tile);
+            EXPECT_EQ(*tile, World::Pos2(x, y));
+        }
+    }
+    EXPECT_FALSE(ParkInterior::pick(-1000, -1000));
+    EXPECT_FALSE(ParkInterior::pick(384, 440));
+}
+
+TEST_F(HybridMapTest, SidecarRoundTripsObjectsFinanceAndRejectsMismatchedOrCorruptFiles)
+{
+    addRoad(0);
+    auto* park = Parks::createPark(centre, objects);
+    ASSERT_NE(park, nullptr);
+    auto d = std::make_shared<Rct2::Definition>(*definition);
+    d->type = 1;
+    d->identity[0] = 1;
+    d->sceneryPrice = 20;
+    d->sprites.resize(4, d->sprites[0]);
+    Rct2Assets::_registry.scenery.push_back(d);
+    ASSERT_TRUE(ParkInterior::place(*park, d, { 2, 3 }, 3));
+    park->lastTax = 42;
+    park->lastOperatingCost = 21;
+    const auto bytes = ParkPersistence::encode(Parks::_parks, 12345);
+    const auto cash = CompanyManager::get(park->owner)->cash.asInt64();
+    auto restored = ParkPersistence::decode(bytes, 12345);
+    ASSERT_EQ(restored.size(), 1u);
+    EXPECT_EQ(restored[0].position, centre);
+    EXPECT_EQ(restored[0].owner, park->owner);
+    EXPECT_EQ(restored[0].paidConstruction, park->paidConstruction);
+    EXPECT_EQ(restored[0].lastChargedMonth, park->lastChargedMonth);
+    EXPECT_EQ(restored[0].lastTax, 42);
+    EXPECT_EQ(restored[0].lastOperatingCost, 21);
+    EXPECT_EQ(restored[0].paidInterior, 20);
+    ASSERT_EQ(restored[0].scenery.size(), 1u);
+    EXPECT_EQ(restored[0].scenery[0].definition, d);
+    EXPECT_EQ(restored[0].scenery[0].tile, World::Pos2(2, 3));
+    EXPECT_EQ(restored[0].scenery[0].rotation, 3);
+    EXPECT_EQ(CompanyManager::get(park->owner)->cash.asInt64(), cash);
+    EXPECT_THROW(ParkPersistence::decode(bytes, 67890), std::runtime_error);
+    auto corrupt = bytes;
+    corrupt[35] ^= 1;
+    EXPECT_THROW(ParkPersistence::decode(corrupt, 12345), std::runtime_error);
+    for (size_t n : { 0U, 20U, 28U })
+    {
+        EXPECT_THROW(ParkPersistence::decode(std::span(bytes).first(n), 12345), std::runtime_error);
+    }
+    Rct2Assets::_registry.scenery.clear();
+    EXPECT_THROW(ParkPersistence::decode(bytes, 12345), std::runtime_error);
+    EXPECT_EQ(Parks::_parks.size(), 1u); // failed decode never mutates live parks
 }

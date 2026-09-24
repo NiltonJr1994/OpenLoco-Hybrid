@@ -132,7 +132,7 @@ int main(int argc, char** argv)
         {
             const std::filesystem::path root = argv[1];
             readPalette(root / "Data" / "g1.dat");
-            unsigned rides = 0, entrances = 0, rejected = 0;
+            unsigned rides = 0, entrances = 0, scenery = 0, rejected = 0;
             for (const auto& e : std::filesystem::directory_iterator(root / "ObjData"))
             {
                 if (!e.is_regular_file())
@@ -140,21 +140,32 @@ int main(int argc, char** argv)
                     continue;
                 }
                 auto file = readFile(e.path());
-                if (file.size() < 21 || ((file[0] & 15) != 0 && (file[0] & 15) != 8))
+                if (file.size() < 21 || ((file[0] & 15) != 0 && (file[0] & 15) != 8 && (file[0] & 15) != 1))
                 {
                     continue;
                 }
                 try
                 {
                     auto d = parse(file);
-                    d.type == 0 ? ++rides : ++entrances;
+                    if (d.type == 0)
+                    {
+                        ++rides;
+                    }
+                    else if (d.type == 8)
+                    {
+                        ++entrances;
+                    }
+                    else
+                    {
+                        ++scenery;
+                    }
                 }
                 catch (const std::exception&)
                 {
                     ++rejected;
                 }
             }
-            std::cout << "Real installation: " << rides << " rides, " << entrances << " entrances, " << rejected << " rejected\n";
+            std::cout << "Real installation: " << rides << " rides, " << entrances << " entrances, " << scenery << " scenery, " << rejected << " rejected\n";
             check(rides > 0 && entrances > 0 && rejected == 0);
         }
         return 0;

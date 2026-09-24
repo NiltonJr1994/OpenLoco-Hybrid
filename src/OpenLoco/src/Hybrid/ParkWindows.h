@@ -4,6 +4,7 @@
 #include "Graphics/DrawingContext.h"
 #include "Graphics/ImageIds.h"
 #include "Graphics/TextRenderer.h"
+#include "Hybrid/ParkInterior.h"
 #include "Hybrid/ParkManager.h"
 #include "Hybrid/Rct2AssetRegistry.h"
 #include "Input.h"
@@ -230,6 +231,13 @@ namespace OpenLoco::Hybrid::ParkWindows
         {
             _insidePark = false;
         }
+        for (const auto id : { Widx::instantiate, Widx::previousTemplate, Widx::nextTemplate })
+        {
+            if (auto* w = findWidget(self, id))
+            {
+                w->hidden = true;
+            }
+        }
         const bool assetsReady = Parks::hasRct2Assets();
         if (auto* w = findWidget(self, Widx::instantiate))
         {
@@ -372,8 +380,14 @@ namespace OpenLoco::Hybrid::ParkWindows
         {
             if (auto* park = Parks::selectedPark(); park != nullptr)
             {
-                _insidePark = true;
-                Parks::_lastStatus = "Browse RCT2 definitions, then Add object to this park.";
+                if (ToolManager::isToolActive(self.type, self.number))
+                {
+                    ToolManager::toolCancel();
+                }
+                Parks::clearPreview();
+                clearMapSelection();
+                ParkInterior::open(park->id);
+                Parks::_lastStatus = "Park interior opened in a separate native window.";
                 self.invalidate();
             }
         }
@@ -448,7 +462,7 @@ namespace OpenLoco::Hybrid::ParkWindows
         auto tr = Gfx::TextRenderer(drawingCtx);
         const auto& assets = Rct2Assets::get();
 
-        drawText(self, tr, 12, 27, "OpenLoco Hybrid v0.6.0-alpha - Native RCT2 assets");
+        drawText(self, tr, 12, 27, "OpenLoco Hybrid v0.7.0-alpha - Native RCT2 assets");
         drawText(self, tr, 12, 45, std::string("RCT2: ") + (assets.ready ? "READY" : "NOT READY") + "  Rides/shops: " + std::to_string(assets.rides.size()) + "  Entrances: " + std::to_string(assets.entrances.size()));
         const auto* park = Parks::selectedPark();
         const auto model = _insidePark && park ? park->model : Parks::_model;
@@ -489,7 +503,7 @@ namespace OpenLoco::Hybrid::ParkWindows
             drawText(self, tr, 12, 166, "Choose a model below. Rotate gate, then place beside a level road.");
             drawText(self, tr, 12, 184, "Water and steep hills are blocked. Trees and minor slopes are quoted.");
             drawText(self, tr, 12, 202, "The miniature appears only at a valid site. Left-click builds the park.");
-            drawText(self, tr, 12, 220, "After building, Enter park opens its objects and cost details.");
+            drawText(self, tr, 12, 220, "Enter park opens the interior editor with real RCT2 scenery.");
         }
         const auto status = "Status: " + Parks::_lastStatus;
         const auto split = status.size() > 78 ? status.rfind(' ', 78) : std::string::npos;
@@ -498,7 +512,7 @@ namespace OpenLoco::Hybrid::ParkWindows
         {
             drawText(self, tr, 12, 264, status.substr(split + 1));
         }
-        drawText(self, tr, 12, 282, "Session-only parks; no saved parks, visitor simulation or TD6 construction.");
+        drawText(self, tr, 12, 282, "Save keeps parks in an .olh companion. Visitors and TD6 are not implemented.");
         drawText(self, tr, 12, 402, "RCT2 assets stay separate from Locomotion ObjData.");
     }
 

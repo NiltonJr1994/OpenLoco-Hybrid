@@ -1,4 +1,5 @@
 #include "Hybrid/ParkManager.h"
+#include "Hybrid/ParkPersistence.h"
 #define DO_TITLE_SEQUENCE_CHECKS
 
 #include "S5/S5.h"
@@ -446,8 +447,22 @@ namespace OpenLoco::S5
     // 0x00441C26
     bool exportGameStateToFile(const fs::path& path, SaveFlags flags)
     {
-        FileStream fs(path, StreamMode::write);
-        return exportGameStateToFile(fs, flags);
+        try
+        {
+            FileStream fs(path, StreamMode::write);
+            const bool result = exportGameStateToFile(fs, flags);
+            fs.close();
+            if (result && (flags & (SaveFlags::scenario | SaveFlags::landscape | SaveFlags::raw | SaveFlags::dump)) == SaveFlags::none && !SceneManager::isNetworked())
+            {
+                Hybrid::ParkPersistence::save(path);
+            }
+            return result;
+        }
+        catch (const std::exception& error)
+        {
+            Hybrid::ParkPersistence::reportError(error);
+            return false;
+        }
     }
 
     bool exportGameStateToFile(Stream& stream, SaveFlags flags)
@@ -709,8 +724,23 @@ namespace OpenLoco::S5
     // 0x00441FA7
     bool importSaveToGameState(const fs::path& path, LoadFlags flags)
     {
-        FileStream fs(path, StreamMode::read);
-        return importSaveToGameState(fs, flags);
+        try
+        {
+            // Validate the companion before changing the current map or company balance.
+            auto parks = flags == LoadFlags::none ? Hybrid::ParkPersistence::read(path) : std::vector<Hybrid::Parks::Park>{};
+            FileStream fs(path, StreamMode::read);
+            const bool result = importSaveToGameState(fs, flags);
+            if (result && flags == LoadFlags::none)
+            {
+                Hybrid::ParkPersistence::restore(std::move(parks));
+            }
+            return result;
+        }
+        catch (const std::exception& error)
+        {
+            Hybrid::ParkPersistence::reportError(error);
+            return false;
+        }
     }
 
     bool importSaveToGameState(Stream& stream, LoadFlags flags)

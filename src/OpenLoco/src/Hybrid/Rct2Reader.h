@@ -174,6 +174,9 @@ namespace OpenLoco::Hybrid::Rct2
         std::string id, name, description, capacity;
         std::array<uint8_t, 3> rideTypes{ 255, 255, 255 };
         uint8_t minCars{}, maxCars{}, flatRideCars{};
+        uint32_t sceneryFlags{};
+        int16_t sceneryPrice{};
+        uint8_t sceneryHeight{};
         std::vector<uint8_t> payload;
         std::vector<Sprite> sprites; // entrance's 12 directional parts, or ride preview
     };
@@ -257,7 +260,7 @@ namespace OpenLoco::Hybrid::Rct2
         Definition d;
         std::copy_n(file.begin(), 16, d.identity.begin());
         d.type = file[0] & 15;
-        if (d.type != 0 && d.type != 8)
+        if (d.type != 0 && d.type != 8 && d.type != 1)
         {
             throw std::runtime_error("Object class not supported by native slice");
         }
@@ -287,7 +290,35 @@ namespace OpenLoco::Hybrid::Rct2
         }
         d.payload = decode(file.subspan(r.pos, length), encoding);
         Reader data{ d.payload };
-        if (d.type == 8)
+        if (d.type == 1)
+        {
+            // Legacy small scenery wire record; see OpenRCT2 SmallSceneryObject::ReadLegacy.
+            data.skip(6);
+            d.sceneryFlags = data.u32();
+            d.sceneryHeight = data.u8();
+            data.skip(1);
+            d.sceneryPrice = static_cast<int16_t>(data.u16());
+            data.skip(0x1C - data.pos);
+            d.name = data.strings();
+            data.skip(16); // Optional scenery-group category, not a rendering dependency.
+            if (d.sceneryFlags & (1U << 15))
+            {
+                size_t count = 0;
+                while (data.u8() != 255)
+                {
+                    if (++count > 256)
+                    {
+                        throw std::runtime_error("Too many scenery animation offsets");
+                    }
+                }
+            }
+            d.sprites = images(data, 4);
+            if (d.sprites.size() != 4 || d.sceneryPrice <= 0)
+            {
+                throw std::runtime_error("Invalid scenery directions or price");
+            }
+        }
+        else if (d.type == 8)
         {
             data.skip(8);
             d.name = data.strings();

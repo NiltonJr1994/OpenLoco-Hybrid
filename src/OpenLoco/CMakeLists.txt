@@ -1,4 +1,8 @@
 set(OLOCO_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/ParkInterior.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/ParkPersistence.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/ParkPersistence.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/ParkVisuals.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/ParkManager.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/ParkWindows.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Hybrid/ParkPaint.h"

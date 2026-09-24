@@ -9,7 +9,7 @@ namespace OpenLoco::Hybrid::Rct2Assets
     {
         std::filesystem::path root;
         Rct2::Palette palette{};
-        std::vector<std::shared_ptr<const Rct2::Definition>> rides, entrances;
+        std::vector<std::shared_ptr<const Rct2::Definition>> rides, entrances, scenery;
         uint32_t unsupported{}, rejected{};
         bool scanned{}, ready{};
         std::string status{ "RCT2 has not been scanned." };
@@ -45,7 +45,7 @@ namespace OpenLoco::Hybrid::Rct2Assets
                     {
                         throw std::runtime_error("Short DAT");
                     }
-                    if ((file[0] & 15) != 0 && (file[0] & 15) != 8)
+                    if ((file[0] & 15) != 0 && (file[0] & 15) != 8 && (file[0] & 15) != 1)
                     {
                         ++next.unsupported;
                         continue;
@@ -60,7 +60,7 @@ namespace OpenLoco::Hybrid::Rct2Assets
                     {
                         throw std::runtime_error("Registry memory limit");
                     }
-                    auto& list = d->type == 0 ? next.rides : next.entrances;
+                    auto& list = d->type == 0 ? next.rides : (d->type == 8 ? next.entrances : next.scenery);
                     if (std::any_of(list.begin(), list.end(), [&](const auto& e) { return e->identity == d->identity; }))
                     {
                         continue;

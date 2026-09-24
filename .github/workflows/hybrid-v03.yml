@@ -1,4 +1,4 @@
-name: Hybrid v0.6 native Windows test build
+name: Hybrid v0.7 native Windows test build
 
 on:
   push:
@@ -82,7 +82,7 @@ jobs:
           data = exe.read_bytes()
           markers = [
               b"Parks (Hybrid)",
-              b"v0.6.0-alpha",
+              b"v0.7.0-alpha",
               b"Native RCT2 assets",
               b"Build park",
               b"Enter park",
@@ -112,14 +112,14 @@ jobs:
           if (Get-ChildItem hybrid-artifact -Recurse -Filter '*openrct2*') { throw "External runtime in package" }
           python tools/hybrid/verify_native.py hybrid-artifact/OpenLoco.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Compress-Archive -Path hybrid-artifact/* -DestinationPath OpenLoco-Hybrid-v0.6.0-alpha-Windows-x64.zip
-          (Get-FileHash OpenLoco-Hybrid-v0.6.0-alpha-Windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content OpenLoco-Hybrid-v0.6.0-alpha-Windows-x64.sha256
+          Compress-Archive -Path hybrid-artifact/* -DestinationPath OpenLoco-Hybrid-v0.7.0-alpha-Windows-x64.zip
+          (Get-FileHash OpenLoco-Hybrid-v0.7.0-alpha-Windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content OpenLoco-Hybrid-v0.7.0-alpha-Windows-x64.sha256
 
       - name: Upload Hybrid test build
         uses: actions/upload-artifact@v7
         with:
-          name: OpenLoco-Hybrid-v0.6.0-alpha-Windows-x64
+          name: OpenLoco-Hybrid-v0.7.0-alpha-Windows-x64
           path: |
-            OpenLoco-Hybrid-v0.6.0-alpha-Windows-x64.zip
-            OpenLoco-Hybrid-v0.6.0-alpha-Windows-x64.sha256
+            OpenLoco-Hybrid-v0.7.0-alpha-Windows-x64.zip
+            OpenLoco-Hybrid-v0.7.0-alpha-Windows-x64.sha256
           if-no-files-found: error

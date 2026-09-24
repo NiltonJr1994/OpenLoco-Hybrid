@@ -56,7 +56,7 @@ namespace OpenLoco::Hybrid::Rct2Graphics
                         continue;
                     }
                     const auto colour = path ? Colour::grey : Colour::mutedGrassGreen;
-                    const auto shade = diamond > 57 ? 3 : (path ? 7 : 5);
+                    const auto shade = path ? 4 + ((x + y * 3) % 5 == 0) : 4 + ((x * 13 + y * 7) % 11 < 3);
                     image->pixels[y * 64 + x] = Colours::getShade(colour, shade);
                 }
             }

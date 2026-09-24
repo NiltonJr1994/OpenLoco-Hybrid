@@ -9,6 +9,14 @@
 
 namespace OpenLoco::Platform
 {
+    fs::path getCurrentExecutablePath()
+    {
+        @autoreleasepool
+        {
+            return [[NSBundle mainBundle] executablePath].UTF8String;
+        }
+    }
+
     void initialise()
     {
     }
