@@ -739,6 +739,7 @@ namespace OpenLoco::S5
         catch (const std::exception& error)
         {
             Hybrid::ParkPersistence::reportError(error);
+            _lastLoadError = LoadError{ .errorCode = -6, .errorMessage = 2486 };
             return false;
         }
     }

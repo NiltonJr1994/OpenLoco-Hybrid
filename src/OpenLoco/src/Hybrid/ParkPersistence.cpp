@@ -9,6 +9,7 @@ namespace OpenLoco::Hybrid::ParkPersistence
 {
     namespace
     {
+        std::string _errorText; // Survives park resets and the transition back to the title screen.
         constexpr uint64_t kOffset = 14695981039346656037ULL;
         uint64_t hash(std::span<const uint8_t> bytes, uint64_t value = kOffset)
         {
@@ -318,7 +319,8 @@ namespace OpenLoco::Hybrid::ParkPersistence
                 c = '?';
             }
         }
-        StringManager::swapString(2486, Parks::_lastStatus.c_str());
+        _errorText = Parks::_lastStatus;
+        StringManager::swapString(2486, _errorText.c_str());
         Ui::Windows::Error::open(StringIds::error_file_contains_invalid_data, 2486);
     }
 }
