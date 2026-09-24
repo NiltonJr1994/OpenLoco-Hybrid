@@ -1,5 +1,6 @@
 #pragma once
 #include "Graphics/DrawingContext.h"
+#include "Graphics/RenderTarget.h"
 #include "Graphics/TextRenderer.h"
 #include "Hybrid/ParkManager.h"
 #include "Localisation/FormatArguments.hpp"
@@ -37,7 +38,8 @@ namespace OpenLoco::Hybrid::ParkInterior
         Widgets::Button(kNext, { 140, 42 }, { 125, 24 }, WindowColour::secondary, kNextText),
         Widgets::Button(kRotate, { 270, 42 }, { 125, 24 }, WindowColour::secondary, kRotateText),
         Widgets::Button(kRemove, { 400, 42 }, { 125, 24 }, WindowColour::secondary, kRemoveText),
-        Widgets::ScrollView({ 8, 92 }, { 784, 420 }, WindowColour::secondary, Scrollbars::none));
+        Widgets::ScrollView({ 196, 92 }, { 596, 420 }, WindowColour::secondary, Scrollbars::horizontal | Scrollbars::vertical),
+        Widgets::ScrollView({ 8, 92 }, { 180, 420 }, WindowColour::secondary, Scrollbars::vertical));
 
     inline Ui::Point project(World::Pos2 tile)
     {
@@ -131,8 +133,19 @@ namespace OpenLoco::Hybrid::ParkInterior
         }
         self.invalidate();
     }
-    inline void click(Window& self, int16_t x, int16_t y, uint8_t)
+    inline void click(Window& self, int16_t x, int16_t y, uint8_t index)
     {
+        if (index == 1)
+        {
+            const auto selected = static_cast<size_t>(std::max<int16_t>(0, y) / 14);
+            if (selected < _catalogue.size())
+            {
+                _object = selected;
+                _remove = false;
+            }
+            self.invalidate();
+            return;
+        }
         auto* park = Parks::getPark(_parkId);
         const auto tile = pick(x, y);
         if (!park || !tile)
@@ -159,18 +172,46 @@ namespace OpenLoco::Hybrid::ParkInterior
         }
         self.invalidate();
     }
-    inline void hover(Window& self, int16_t x, int16_t y, uint8_t)
+    inline void hover(Window& self, int16_t x, int16_t y, uint8_t index)
     {
+        if (index != 0)
+        {
+            return;
+        }
         _hover = pick(x, y);
         self.invalidate();
     }
-    inline void size(Window&, uint32_t, int32_t& w, int32_t& h)
+    inline void size(Window&, uint32_t index, int32_t& w, int32_t& h)
     {
-        w = 780;
-        h = 416;
+        w = index == 0 ? 780 : 164;
+        h = index == 0 ? 416 : static_cast<int32_t>(_catalogue.size() * 14);
     }
-    inline void drawScroll(Window&, Gfx::DrawingContext& ctx, uint32_t)
+    inline void drawScroll(Window&, Gfx::DrawingContext& ctx, uint32_t index)
     {
+        if (index == 1)
+        {
+            ctx.clearSingle(Colours::getShade(Colour::grey, 6));
+            Gfx::TextRenderer tr(ctx);
+            for (size_t i = 0; i < _catalogue.size(); ++i)
+            {
+                const auto y = static_cast<int16_t>(i * 14);
+                const auto& rt = ctx.currentRenderTarget();
+                if (y + 14 < rt.y || y >= rt.y + rt.height)
+                {
+                    continue;
+                }
+                if (i == _object)
+                {
+                    ctx.fillRect(0, y, 164, y + 13, Colours::getShade(Colour::grey, 4), Gfx::RectFlags::none);
+                }
+                char name[256]{};
+                const auto& text = _catalogue[i]->name;
+                std::copy_n(text.data(), std::min(text.size(), sizeof(name) - 8), name);
+                Gfx::TextRenderer::clipString(tr.getCurrentFont(), 158, name);
+                tr.drawString({ 2, y }, AdvancedColour::FD(), name);
+            }
+            return;
+        }
         ctx.clearSingle(Colours::getShade(Colour::mutedGrassGreen, 3));
         const auto* park = Parks::getPark(_parkId);
         if (!park)
@@ -271,6 +312,7 @@ namespace OpenLoco::Hybrid::ParkInterior
                 _catalogue.push_back(d);
             }
         }
+        std::sort(_catalogue.begin(), _catalogue.end(), [](const auto& a, const auto& b) { return a->name < b->name; });
         _object = 0;
         _rotation = 0;
         _remove = false;

@@ -9,6 +9,7 @@
 #include "GameState.h"
 #include "GameStateFlags.h"
 #include "Hybrid/ParkManager.h"
+#include "Hybrid/ParkPersistence.h"
 #include "Localisation/StringIds.h"
 #include "Logging.h"
 #include "Map/AnimationManager.h"
@@ -87,6 +88,11 @@ namespace OpenLoco::Scenes::GameScene
                         auto path8 = autosaveFiles[i].u8string();
                         Logging::info("Deleting old autosave: {}", path8.c_str());
                         fs::remove(autosaveFiles[i]);
+                        const auto companion = Hybrid::ParkPersistence::sidecarPath(autosaveFiles[i]);
+                        fs::remove(companion);
+                        auto backup = companion;
+                        backup += ".bak";
+                        fs::remove(backup);
                     }
                 }
             }

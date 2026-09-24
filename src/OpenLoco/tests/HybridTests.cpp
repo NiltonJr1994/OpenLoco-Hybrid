@@ -214,6 +214,7 @@ namespace
             }
             Colours::initColourMap();
             auto entrance = std::make_shared<Rct2::Definition>(*definition);
+            entrance->identity[0] = 8;
             entrance->sprites.clear();
             for (int i = 0; i < 12; ++i)
             {
@@ -223,6 +224,7 @@ namespace
             for (auto type : { 21, 33, 37, 52 })
             {
                 auto d = std::make_shared<Rct2::Definition>(*definition);
+                d->identity[5] = static_cast<uint8_t>(type);
                 d->rideTypes = { static_cast<uint8_t>(type), 255, 255 };
                 Rct2Assets::_registry.rides.push_back(d);
             }
@@ -461,4 +463,26 @@ TEST_F(HybridMapTest, SidecarRoundTripsObjectsFinanceAndRejectsMismatchedOrCorru
     Rct2Assets::_registry.scenery.clear();
     EXPECT_THROW(ParkPersistence::decode(bytes, 12345), std::runtime_error);
     EXPECT_EQ(Parks::_parks.size(), 1u); // failed decode never mutates live parks
+}
+
+TEST_F(HybridMapTest, SidecarRebuildsSpritesAfterResetWithoutChargingCompany)
+{
+    addRoad(0);
+    auto* park = Parks::createPark(centre, objects);
+    ASSERT_NE(park, nullptr);
+    const auto owner = park->owner;
+    auto* company = CompanyManager::get(owner);
+    company->name = 1;
+    const auto cash = company->cash.asInt64();
+    const auto data = ParkPersistence::encode(Parks::_parks, 91);
+    auto saved = ParkPersistence::decode(data, 91);
+    Parks::reset();
+    ParkPersistence::restore(std::move(saved));
+    ASSERT_EQ(Parks::_parks.size(), 1u);
+    EXPECT_NE(Gfx::getG1Element(Parks::_parks[0].entranceImage), nullptr);
+    EXPECT_NE(Gfx::getG1Element(Parks::_parks[0].rides[0].image), nullptr);
+    EXPECT_EQ(company->cash.asInt64(), cash);
+    Parks::updateMonthly();
+    EXPECT_EQ(company->cash.asInt64(), cash);
+    EXPECT_EQ(Parks::_nextParkId, 2);
 }

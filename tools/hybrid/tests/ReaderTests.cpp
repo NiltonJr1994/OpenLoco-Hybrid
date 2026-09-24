@@ -70,6 +70,21 @@ static std::vector<uint8_t> fixture(bool ride)
     file.insert(file.end(), payload.begin(), payload.end());
     return file;
 }
+static std::vector<uint8_t> sceneryFixture()
+{
+    auto file = fixture(false);
+    std::vector<uint8_t> payload(file.begin() + 21, file.end());
+    payload.erase(payload.begin(), payload.begin() + 8);
+    payload.insert(payload.begin(), 28, 0);
+    payload[10] = 32;
+    payload[12] = 20;
+    payload.insert(payload.begin() + 35, 16, 0);
+    file.resize(17);
+    file[0] = 1;
+    u32(file, static_cast<uint32_t>(payload.size()));
+    file.insert(file.end(), payload.begin(), payload.end());
+    return file;
+}
 int main(int argc, char** argv)
 {
     try
@@ -82,6 +97,15 @@ int main(int argc, char** argv)
         rejects([] { decode(std::array<uint8_t, 2>{ 3, 5 }, 1); });
         rejects([] { decode(std::array<uint8_t, 2>{ 0, 0 }, 2); });
         rejects([] { decode(std::array<uint8_t, 1>{ 0 }, 4); });
+        auto scenery = sceneryFixture();
+        auto object = parse(scenery);
+        check(object.type == 1 && object.sceneryPrice == 20 && object.sceneryHeight == 32);
+        check(object.sprites.size() == 4 && object.name == "Test");
+        scenery[21 + 12] = 0;
+        rejects([&] { parse(scenery); });
+        scenery = sceneryFixture();
+        scenery.resize(scenery.size() - 1);
+        rejects([&] { parse(scenery); });
         for (bool ride : { false, true })
         {
             auto f = fixture(ride);
