@@ -2,6 +2,7 @@
 #include "Economy/Economy.h"
 #include "GameCommands/Buildings/RemoveBuilding.h"
 #include "GameCommands/GameCommands.h"
+#include "Hybrid/ParkManager.h"
 #include "Localisation/FormatArguments.hpp"
 #include "Localisation/StringIds.h"
 #include "Map/BuildingElement.h"
@@ -382,6 +383,11 @@ namespace OpenLoco::World::TileClearance
     // 0x00462937
     static bool canConstructAtWithClear(const World::Pos2& pos, uint8_t baseZ, uint8_t clearZ, const QuarterTile& qt, BuildingCollisionType flags, std::function<ClearFuncResult(TileElementEntry& el)> clearFunc)
     {
+        if (Hybrid::Parks::contains(pos))
+        {
+            GameCommands::setErrorText(StringIds::object_in_the_way);
+            return false;
+        }
         _constructAtElementPositionFlags = ElementPositionFlags::aboveGround;
         if (!drawableCoords(pos))
         {

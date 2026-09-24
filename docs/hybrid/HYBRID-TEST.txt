@@ -1,0 +1,15 @@
+OpenLoco Hybrid v0.7.0-alpha - first interior editor
+
+Extract into a NEW folder. Copy your RCT2 Data and ObjData into RCT2 beside OpenLoco.exe. Keep Locomotion ObjData separate.
+
+1. Start a single-player company, open Parks (Hybrid), select a regional model, Build park and Rotate gate. The entrance must touch a ground-level road. Check the quote before clicking.
+2. Enter park opens a separate native INTERIOR window in the same executable.
+3. Browse real RCT2 Scenery, rotate it and click grass in the independent 12x12 interior. Occupied cells and paths reject construction. Your company pays the displayed construction price once.
+4. Build / Remove switches to removal (no refund). Close/reopen the interior: placement remains.
+5. Save normally. Keep BOTH YourSave.SV5 and YourSave.SV5.olh. Reload and check regional parks, interior objects, ownership and financial counters. Loading must not charge construction again.
+6. Corrupt/mismatched companions or missing required DATs must produce a visible error. Ordinary saves without a companion still load.
+7. Existing monthly park tax/upkeep uses company Miscellaneous expenses and native inflation. No visitor revenue is generated yet.
+
+LIMITS: this is an interior scenery editor, not a complete RCT2 simulation. Real static scenery and entrance sprites are rendered. Regional ride miniatures remain visual proxies. Paths are fixed. No visitors, operational rides/shops, TD6, SC6/SV6 import, transport destinations or park AI yet. Unsupported scenery animation/glass/overlay types are excluded. One object reserves a whole interior tile.
+
+Small-scenery legacy price units map to Hybrid construction base units, adjusted by native inflation. Monthly tax: 98 + 5 per regional ride definition. Upkeep: 60 + 10 per regional ride definition (1900 base). Interior scenery has construction cost but no simulated operation.

@@ -7,6 +7,7 @@
 #include "GameCommands/GameCommands.h"
 #include "GameState.h"
 #include "GameStateFlags.h"
+#include "Hybrid/ParkManager.h"
 #include "Input.h"
 #include "Localisation/FormatArguments.hpp"
 #include "Localisation/StringIds.h"
@@ -150,6 +151,7 @@ namespace OpenLoco::World::TileManager
 
     static void storeClearAll()
     {
+        Hybrid::Parks::reset();
         tileState().surface.clear();
         tileState().track.clear();
         tileState().station.clear();

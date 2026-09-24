@@ -6,6 +6,7 @@
 #include "Graphics/PaletteMap.h"
 #include "Graphics/RenderTarget.h"
 #include "Graphics/TextRenderer.h"
+#include "Hybrid/ParkManager.h"
 #include "Localisation/Formatting.h"
 #include "Localisation/StringManager.h"
 #include "Logging.h"
@@ -134,6 +135,10 @@ namespace OpenLoco::Paint
             }
         }
         _maxHeight = (maxClearZ * World::kSmallZStep) + 32;
+        if (Hybrid::Parks::contains(loc))
+        {
+            _maxHeight += 160;
+        }
     }
 
     /*

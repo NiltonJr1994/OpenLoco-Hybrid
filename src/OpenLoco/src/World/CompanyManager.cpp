@@ -13,6 +13,7 @@
 #include "GameState.h"
 #include "GameStateFlags.h"
 #include "Graphics/Colour.h"
+#include "Hybrid/ParkManager.h"
 #include "Localisation/FormatArguments.hpp"
 #include "Localisation/Formatting.h"
 #include "Map/Tile.h"
@@ -264,6 +265,9 @@ namespace OpenLoco::CompanyManager
         {
             company.updateMonthly1();
         }
+
+        OpenLoco::Hybrid::Parks::updateMonthly();
+
         Ui::WindowManager::invalidate(Ui::WindowType::company);
         Ui::WindowManager::invalidate(Ui::WindowType::companyList);
         Ui::WindowManager::invalidate(Ui::WindowType::companyInfoPanel);

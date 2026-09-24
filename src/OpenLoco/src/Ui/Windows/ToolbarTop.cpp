@@ -9,6 +9,7 @@
 #include "Graphics/DrawingContext.h"
 #include "Graphics/Gfx.h"
 #include "Graphics/ImageIds.h"
+#include "Hybrid/ParkWindows.h"
 #include "Input.h"
 #include "Jukebox.h"
 #include "Localisation/StringIds.h"
@@ -1234,9 +1235,19 @@ namespace OpenLoco::Ui::Windows::ToolbarTop
     static void townsMenuMouseDown(Window& self, WidgetIndex_t widgetIndex)
     {
         auto interface = ObjectManager::get<InterfaceSkinObject>();
+        OpenLoco::Hybrid::ParkWindows::installStrings();
+        const bool parksAvailable = OpenLoco::Hybrid::Parks::hasRct2Assets();
         Dropdown::add(0, StringIds::menu_sprite_stringid, { interface->img + InterfaceSkin::ImageIds::toolbar_menu_towns, StringIds::menu_towns });
         Dropdown::add(1, StringIds::menu_sprite_stringid, { interface->img + InterfaceSkin::ImageIds::toolbar_menu_industries, StringIds::menu_industries });
-        Dropdown::showBelow(&self, widgetIndex, 2, 25, (1 << 6));
+        if (parksAvailable)
+        {
+            Dropdown::add(2, StringIds::menu_sprite_stringid, { interface->img + InterfaceSkin::ImageIds::toolbar_menu_industries, OpenLoco::Hybrid::ParkWindows::kStringMenuParks });
+        }
+        if (!parksAvailable && _defaultTownObjectId > 1)
+        {
+            _defaultTownObjectId = 0;
+        }
+        Dropdown::showBelow(&self, widgetIndex, parksAvailable ? 3 : 2, 25, (1 << 6));
         Dropdown::setHighlightedItem(_defaultTownObjectId);
     }
 
@@ -1257,6 +1268,11 @@ namespace OpenLoco::Ui::Windows::ToolbarTop
         {
             IndustryList::open();
             _defaultTownObjectId = 1;
+        }
+        else if (itemIndex == 2 && OpenLoco::Hybrid::Parks::hasRct2Assets())
+        {
+            OpenLoco::Hybrid::ParkWindows::open();
+            _defaultTownObjectId = 2;
         }
     }
 

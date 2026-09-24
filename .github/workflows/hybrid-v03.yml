@@ -1,0 +1,125 @@
+name: Hybrid v0.7 native Windows test build
+
+on:
+  push:
+    branches:
+      - hybrid/v0.3-map-integration
+  workflow_dispatch:
+
+concurrency:
+  group: hybrid-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-x64:
+    name: Hybrid Windows x64
+    runs-on: windows-2022
+    env:
+      CONFIGURATION: Release
+      POWERSHELL_TELEMETRY_OPTOUT: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Setup cache env vars
+        shell: pwsh
+        run: |
+          echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/vcpkg-cache" | Out-File -FilePath $env:GITHUB_ENV -Append
+          New-Item -ItemType Directory -Force "${{ github.workspace }}/vcpkg-cache" | Out-Null
+
+      - name: Get vcpkg baseline
+        id: vcpkg_baseline
+        shell: bash
+        run: |
+          sha=$(sed -n 's/^set(VCPKG_GIT_TAG[[:space:]]*\([0-9a-f]*\)).*/\1/p' CMakeLists.txt)
+          test -n "$sha" || { echo "VCPKG_GIT_TAG not found in CMakeLists.txt" >&2; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: windows-2022-64-vcpkg-${{ steps.vcpkg_baseline.outputs.sha }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            windows-2022-64-vcpkg-${{ steps.vcpkg_baseline.outputs.sha }}-
+
+      - name: Validate native architecture
+        run: python tools/hybrid/verify_native.py
+
+      - name: Build and test native RCT2 reader (Windows x64)
+        shell: pwsh
+        run: |
+          cmake -S tools/hybrid/tests -B build/hybrid-tests -A x64
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build/hybrid-tests --config Release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ctest --test-dir build/hybrid-tests -C Release --output-on-failure
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Configure
+        shell: cmd
+        run: cmake --preset windows
+
+      - name: Build
+        shell: cmd
+        run: cmake --build --preset windows-release
+
+      - name: Test OpenLoco integration
+        shell: pwsh
+        run: ctest --test-dir build/windows -C Release --output-on-failure
+
+      - name: Verify Hybrid binary markers
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          exe = Path(r"build/windows/Release/OpenLoco.exe")
+          if not exe.exists():
+              raise SystemExit("OpenLoco.exe was not produced")
+          data = exe.read_bytes()
+          markers = [
+              b"Parks (Hybrid)",
+              b"v0.7.0-alpha",
+              b"Native RCT2 assets",
+              b"Build park",
+              b"Enter park",
+              b"Add object",
+          ]
+          for marker in markers:
+              if marker not in data:
+                  raise SystemExit(f"Missing Hybrid marker: {marker!r}")
+          print(f"Verified Hybrid executable: {exe.stat().st_size} bytes")
+          '@ | python -
+
+      - name: Save vcpkg binary cache
+        if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: windows-2022-64-vcpkg-${{ steps.vcpkg_baseline.outputs.sha }}-${{ hashFiles('vcpkg.json') }}-${{ hashFiles('vcpkg-cache/**') }}
+
+      - name: Package and verify test build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force hybrid-artifact/RCT2/Data,hybrid-artifact/RCT2/ObjData | Out-Null
+          Copy-Item CHANGELOG.md,CONTRIBUTORS.md,LICENSE hybrid-artifact
+          Copy-Item build/windows/Release/* hybrid-artifact -Recurse
+          Copy-Item docs/hybrid/HYBRID-TEST.txt hybrid-artifact
+          Copy-Item docs/hybrid/NATIVE-BRIDGE.md hybrid-artifact
+          if (Get-ChildItem hybrid-artifact -Recurse -Filter '*openrct2*') { throw "External runtime in package" }
+          python tools/hybrid/verify_native.py hybrid-artifact/OpenLoco.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Compress-Archive -Path hybrid-artifact/* -DestinationPath OpenLoco-Hybrid-v0.7.0-alpha-Windows-x64.zip
+          (Get-FileHash OpenLoco-Hybrid-v0.7.0-alpha-Windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content OpenLoco-Hybrid-v0.7.0-alpha-Windows-x64.sha256
+
+      - name: Upload Hybrid test build
+        uses: actions/upload-artifact@v7
+        with:
+          name: OpenLoco-Hybrid-v0.7.0-alpha-Windows-x64
+          path: |
+            OpenLoco-Hybrid-v0.7.0-alpha-Windows-x64.zip
+            OpenLoco-Hybrid-v0.7.0-alpha-Windows-x64.sha256
+          if-no-files-found: error
