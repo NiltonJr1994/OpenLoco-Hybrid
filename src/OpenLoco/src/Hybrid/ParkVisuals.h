@@ -97,6 +97,21 @@ namespace OpenLoco::Hybrid::ParkVisuals
                 }
             }
         }
+        void triangle(Ui::Point a, Ui::Point b, Ui::Point c, uint8_t colour)
+        {
+            auto edge = [](Ui::Point u, Ui::Point v, int x, int y) { return (x - u.x) * (v.y - u.y) - (y - u.y) * (v.x - u.x); };
+            for (int y = std::max(0, std::min({ a.y, b.y, c.y })); y <= std::min(95, std::max({ a.y, b.y, c.y })); ++y)
+            {
+                for (int x = std::max(0, std::min({ a.x, b.x, c.x })); x <= std::min(95, std::max({ a.x, b.x, c.x })); ++x)
+                {
+                    const auto p = edge(a, b, x, y), q = edge(b, c, x, y), r = edge(c, a, x, y);
+                    if ((p >= 0 && q >= 0 && r >= 0) || (p <= 0 && q <= 0 && r <= 0))
+                    {
+                        pixels[y * 96 + x] = colour;
+                    }
+                }
+            }
+        }
         void line(Ui::Point a, Ui::Point b, uint8_t colour)
         {
             const int steps = std::max(std::abs(b.x - a.x), std::abs(b.y - a.y));
@@ -127,9 +142,14 @@ namespace OpenLoco::Hybrid::ParkVisuals
                 Canvas c;
                 c.rotation = rotation;
                 const auto phase = frame * 2 * pi / kFrames;
+                const auto baseColour = Colours::getShade(Colour::grey, 5);
+                c.triangle(c.project(-17, -17, 0), c.project(17, -17, 0), c.project(17, 17, 0), baseColour);
+                c.triangle(c.project(-17, -17, 0), c.project(17, 17, 0), c.project(-17, 17, 0), baseColour);
                 if (type == Kind::wheel)
                 {
                     auto hub = c.project(0, 0, 28);
+                    c.triangle(c.project(-14, -5, 0), c.project(-10, -5, 0), hub, white);
+                    c.triangle(c.project(14, 5, 0), c.project(10, 5, 0), hub, dark);
                     c.line(c.project(-14, -5, 0), hub, white);
                     c.line(c.project(14, 5, 0), hub, white);
                     for (int n = 0; n < 48; ++n)
@@ -151,7 +171,8 @@ namespace OpenLoco::Hybrid::ParkVisuals
                     for (int n = 0; n < 32; ++n)
                     {
                         const auto a = n * 2 * pi / 32;
-                        c.line(c.project(0, 0, 29), c.project(19 * std::cos(a), 19 * std::sin(a), 17), n % 4 < 2 ? red : white);
+                        const auto b = (n + 1) * 2 * pi / 32;
+                        c.triangle(c.project(0, 0, 29), c.project(19 * std::cos(a), 19 * std::sin(a), 17), c.project(19 * std::cos(b), 19 * std::sin(b), 17), n % 4 < 2 ? red : white);
                         c.dot(c.project(20 * std::cos(a), 20 * std::sin(a), 1), yellow);
                     }
                     for (int n = 0; n < 6; ++n)
@@ -169,9 +190,11 @@ namespace OpenLoco::Hybrid::ParkVisuals
                         const auto a = n * 2 * pi / 48;
                         if (n % 4 == 0)
                         {
-                            c.line(c.project(24 * std::cos(a), 19 * std::sin(a), 0), point(a), dark);
+                            c.line(c.project(24 * std::cos(a), 19 * std::sin(a), 0), point(a), Colours::getShade(Colour::brown, 6));
+                            c.line(c.project(24 * std::cos(a + 0.22), 19 * std::sin(a + 0.22), 0), point(a), Colours::getShade(Colour::brown, 5));
                         }
                         c.line(point(a), point((n + 1) * 2 * pi / 48), red);
+                        c.line(point(a) + Ui::Point{ 0, 1 }, point((n + 1) * 2 * pi / 48) + Ui::Point{ 0, 1 }, yellow);
                     }
                     for (int n = 0; n < 3; ++n)
                     {
@@ -180,11 +203,15 @@ namespace OpenLoco::Hybrid::ParkVisuals
                 }
                 else
                 {
-                    c.line(c.project(0, 0, 0), c.project(0, 0, 42), white);
+                    c.triangle(c.project(-3, -3, 0), c.project(3, 3, 0), c.project(3, 3, 42), blue);
+                    c.triangle(c.project(-3, -3, 0), c.project(-3, -3, 42), c.project(3, 3, 42), white);
                     for (int n = 0; n < 96; ++n)
                     {
                         const auto a = n * 4 * pi / 96;
-                        c.line(c.project(12 * std::cos(a), 12 * std::sin(a), 40 - n * 0.38), c.project(12 * std::cos(a + 0.14), 12 * std::sin(a + 0.14), 40 - (n + 1) * 0.38), yellow);
+                        for (int thick = 0; thick < 3; ++thick)
+                        {
+                            c.line(c.project(12 * std::cos(a), 12 * std::sin(a), 40 - n * 0.38) + Ui::Point{ 0, static_cast<int16_t>(thick) }, c.project(12 * std::cos(a + 0.14), 12 * std::sin(a + 0.14), 40 - (n + 1) * 0.38) + Ui::Point{ 0, static_cast<int16_t>(thick) }, yellow);
+                        }
                     }
                     c.dot(c.project(12 * std::cos(phase * 2), 12 * std::sin(phase * 2), 40 - frame * 4.6), red, 2);
                 }

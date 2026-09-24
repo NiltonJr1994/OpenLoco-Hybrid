@@ -9,6 +9,7 @@
 #include "Map/TileManager.h"
 #include "Map/TreeElement.h"
 #include "Objects/LandObject.h"
+#include "Objects/ObjectManager.h"
 #include "Objects/RoadObject.h"
 #include "Objects/TreeObject.h"
 #include "Scenario/ScenarioOptions.h"
