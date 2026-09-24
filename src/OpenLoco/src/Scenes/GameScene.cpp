@@ -8,6 +8,7 @@
 #include "Game.h"
 #include "GameState.h"
 #include "GameStateFlags.h"
+#include "Hybrid/ParkManager.h"
 #include "Localisation/StringIds.h"
 #include "Logging.h"
 #include "Map/AnimationManager.h"
@@ -236,6 +237,7 @@ namespace OpenLoco::Scenes::GameScene
         EffectsManager::tick();
         CompanyManager::tick();
         World::AnimationManager::tick();
+        Hybrid::Parks::tick();
         Audio::tick();
 
         Scenario::getOptions().madeAnyChanges = userMadeAnyChanges;

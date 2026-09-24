@@ -1,35 +1,24 @@
-OpenLoco Hybrid v0.5.1-alpha — native RCT2 vertical slice
+OpenLoco Hybrid v0.6.0-alpha - native park construction test
 
-Extract the complete package into a new folder.
-Copy your RCT2 Data and ObjData folders into RCT2 beside OpenLoco.exe.
-Keep Locomotion's ObjData separate, including all your vehicle mods.
-No OpenRCT2 executable is required or included.
+Extract into a new folder. Copy your RCT2 Data and ObjData directories into RCT2 beside OpenLoco.exe. Keep Locomotion ObjData separate.
 
-1. Start OpenLoco.exe with your normal Locomotion assets and load a scenario.
-2. Open Towns/Industries -> Parks (Hybrid).
-3. Confirm decoded rides/entrances; the provided GOG installation has 267/16.
-4. Build park: choose flat, clear, dry 7x7 land within 48 tiles of a town.
-   The construction cost is 5,000. Invalid placement reports a reason.
-5. Confirm the real RCT2 entrance is visible on the map after closing the window.
-   Rotate and zoom the map, and reopen Parks (Hybrid).
-6. Enter park: the window becomes a native object browser inside OpenLoco.
-7. Browse with < Object / Object >. Confirm DAT name, properties and real preview.
-8. Add object. Confirm the instance count and last object's name change and its
-   visual proxy appears inside the 7x7 footprint. Repeat with another definition.
-9. Check Task Manager: this flow must never start OpenRCT2 or any other game.
-10. Build a second park; Previous park must retain each park's own instances.
-11. Try building a road on the park; shared construction clearance must reject it.
-12. Load another scenario: old parks/proxies must disappear.
+Start a single-player scenario and create a company. Open Towns/Industries > Parks (Hybrid).
 
-This is a session-only native integration test, not a finished park simulator.
-Parks/objects are not saved yet. Objects are free and limited to nine per park.
-TD6 construction, operational rides and visitors are not implemented.
-See NATIVE-BRIDGE.md for exact boundaries and automated validation details.
+1. Confirm the window shows its version, registry status, model and prices. Drag the window: text must remain inside it.
+2. Choose Classic Fair, Coaster Park or Family Gardens using Park model buttons.
+3. Click Build park. Rotate gate chooses one of four entrance sides. The construction arrow marks the gate side even when the site is invalid.
+4. Choose a 7x7 area near town. A ground-level road must touch the centre tile immediately outside the chosen entrance edge.
+5. The full miniature appears ONLY at a valid site. Water, large slopes, industry land, roads/rails/buildings inside the footprint, bridges as access and other parks are rejected with a reason.
+6. Trees are quoted for removal. Small height differences are quoted for levelling. Check the total BEFORE left-clicking. Insufficient funds must leave the terrain and cash unchanged.
+7. Left-click once. The park stays, the quote is deducted once, the entrance is compact, and Enter park becomes available. Clicking the same site again must not double-charge.
+8. Rotate the map and inspect the model. Ferris wheel, carousel, coaster train and slide have native miniature animations. Pause the game: animation pauses too. These are visual models linked to real RCT2 definitions, not the full RCT2 simulation.
+9. Enter park lists real objects. Browse/Add object updates its object count and monthly cost.
+10. Advance to the next month. Tax and upkeep debit the owning company's Miscellaneous expenses. No monthly charge occurs merely for previewing or cancelling.
 
-V0.5.1 placement fix:
-- The registry, object preview and rejection messages follow the window position.
-- Build park shows a 7x7 garden/path miniature and the real RCT2 entrance under the cursor.
-- A valid site says "Valid 7x7 site"; trees, water, slopes and existing buildings block creation.
-- Clear/level the land first. Failed clicks do not charge construction money.
-- After a successful click the miniature stays on the map and Enter park becomes available.
-- Moving off the map, cancelling, closing the window or loading a map clears the placement preview.
+FINANCE (1900 base units, adjusted by the game's native inflation):
+Construction: Classic Fair 5000, Coaster Park 6500, Family Gardens 4500, plus native tree clearance/land levelling costs.
+Monthly park tax: 2 per occupied tile (49 tiles) + 5 per object.
+Monthly upkeep: 60 per park + 10 per object.
+Tax uses construction inflation index 8; upkeep uses index 0. Charges use the same monthly company-payment path as vehicles; no automatic revenue is fabricated.
+
+LIMITS: parks and their finances are session-only and are not saved in S5. No TD6 layout construction, visitors or operational RCT2 ride simulation. Terrain levelling is limited to 16 world-height units to avoid cutting large hills. Do not save/reload expecting Hybrid parks to persist.

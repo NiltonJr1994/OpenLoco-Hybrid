@@ -62,3 +62,14 @@ Wire-format references examined: OpenRCT2 v0.5.3, commit
 f503f57bdb74b31507f83909db587a5db5794ef0, object/EntranceObject.cpp,
 object/RideObject.cpp, object/ImageTable.cpp, sawyer_coding/SawyerChunkReader.cpp
 and SpriteIds.h. No OpenRCT2 source files are compiled into this fork.
+
+
+## v0.6 construction and miniature correction
+
+Window drawing follows WindowManager's pushClip local-coordinate contract and uses the native text palette. The regression test now exercises that actual clip operation.
+
+A shared site quote is used by preview and commit. Invalid water/steep/occupied sites do not show a park ghost. Ground-level road access is required at the rotated gate edge. Trees and small slopes use native object clearance/land cost factors; clearing and flattening happen only after whole-site validation and funding. The footprint remains 7x7. The gate is composited from real DAT pieces, then reduced to at most 60x44 pixels.
+
+Three selectable layouts instantiate real DAT definitions (legacy ride types 21, 33, 37 and 52). Small native animated sprites represent slides, carousels, Ferris wheels and coaster trains. These procedural regional visual proxies are not decoded RCT2 animation sequences or an embedded RCT2 simulation. Other catalog objects use reduced real DAT thumbnails.
+
+Monthly tax is 98 + 5 per object at 1900 construction inflation index 8. Upkeep is 60 + 10 per object at index 0. The monthly hook debits Miscellaneous via CompanyManager::applyPaymentToCompany, just as vehicles debit their running-cost categories; the park records the last month to prevent duplicate charging. Prices are formatted with the active in-game currency. No visitor income is simulated. Session-only/S5 and full terrain-reservation limitations still apply.

@@ -1,4 +1,5 @@
 #include "../src/Hybrid/ParkWindows.h"
+#include <OpenLoco/GameState.h>
 #include <OpenLoco/Graphics/RenderTarget.h>
 #include <OpenLoco/Graphics/SoftwareDrawingContext.h>
 #include <OpenLoco/Localisation/Formatting.h>
@@ -144,11 +145,13 @@ TEST_F(HybridTest, WindowTextRendersInsideAnOffsetClippedWindow)
     Gfx::SoftwareDrawingContext context;
     context.pushRenderTarget({});
     context.pushRenderTarget({ pixels.data(), 400, 200, 64, 64, 0 });
+    ASSERT_TRUE(context.pushClip(Ui::Rect(400, 200, 64, 64)));
     Gfx::TextRenderer renderer(context);
     Ui::Window window({ 400, 200 }, { 64, 64 });
     // Supply the text palette explicitly; unit tests do not load game graphics.
-    const std::string text{ static_cast<char>(ControlCodes::Colour::black), 'A' };
+    const std::string text = "A";
     ParkWindows::drawText(window, renderer, 12, 27, text);
+    context.popClip();
     context.popRenderTarget();
     *glyph = savedGlyph;
     *textPalette = savedTextPalette;
@@ -156,28 +159,221 @@ TEST_F(HybridTest, WindowTextRendersInsideAnOffsetClippedWindow)
     EXPECT_EQ(pixels[0], 99);
 }
 
-TEST_F(HybridTest, PlacementPreviewMovesWithoutCreatingOrReservingAParkAndClearsOnReset)
+namespace
 {
-    Rct2Assets::_registry.entrances.push_back(definition);
-    Parks::preparePreview();
-    Parks::movePreview({ 325, 327 });
+    class HybridMapTest : public HybridTest
+    {
+    protected:
+        World::Pos2 centre{ 640, 640 };
+        RoadObject roadObject{};
+        LandObject landObject{};
+        TreeObject treeObject{};
+        Parks::SiteObjects objects;
+        std::array<Gfx::G1Element, 31> savedMaps;
+        std::array<std::array<uint8_t, 256>, 31> maps{};
+        void SetUp() override
+        {
+            HybridTest::SetUp();
+            World::TileManager::allocateMapElements();
+            World::TileManager::initialise();
+            for (auto& t : getGameState().towns)
+            {
+                t.name = StringIds::null;
+            }
+            auto& town = getGameState().towns[0];
+            town.name = 1;
+            town.x = 640;
+            town.y = 480;
+            town.numBuildings = 10;
+            for (auto& factor : getGameState().currencyMultiplicationFactor)
+            {
+                factor = 1024;
+            }
+            CompanyManager::get(CompanyId(0))->cash = currency48_t(100000);
+            CompanyManager::get(CompanyId(0))->challengeFlags = CompanyFlags::none;
+            roadObject.flags = RoadObjectFlags::isRoad;
+            landObject.costFactor = 10;
+            landObject.costIndex = 8;
+            treeObject.clearCostFactor = 80;
+            treeObject.costIndex = 8;
+            objects.road = [&](size_t) { return &roadObject; };
+            objects.land = [&](size_t) { return &landObject; };
+            objects.tree = [&](size_t) { return &treeObject; };
+            for (size_t c = 0; c < 31; ++c)
+            {
+                auto* g = Gfx::getG1Element(ImageIds::paletteMapBlack + c);
+                savedMaps[c] = *g;
+                for (size_t i = 0; i < 256; ++i)
+                {
+                    maps[c][i] = static_cast<uint8_t>(10 + (c * 7 + i) % 220);
+                }
+                g->offset = maps[c].data();
+                g->width = 256;
+                g->height = 1;
+            }
+            Colours::initColourMap();
+            auto entrance = std::make_shared<Rct2::Definition>(*definition);
+            entrance->sprites.clear();
+            for (int i = 0; i < 12; ++i)
+            {
+                entrance->sprites.push_back({ 96, 120, -48, -104, std::vector<uint8_t>(96 * 120, 100) });
+            }
+            Rct2Assets::_registry.entrances = { entrance };
+            for (auto type : { 21, 33, 37, 52 })
+            {
+                auto d = std::make_shared<Rct2::Definition>(*definition);
+                d->rideTypes = { static_cast<uint8_t>(type), 255, 255 };
+                Rct2Assets::_registry.rides.push_back(d);
+            }
+        }
+        void TearDown() override
+        {
+            for (size_t i = 0; i < 31; ++i)
+            {
+                *Gfx::getG1Element(ImageIds::paletteMapBlack + i) = savedMaps[i];
+            }
+            HybridTest::TearDown();
+        }
+        World::RoadElement& addRoad(uint8_t rotation)
+        {
+            auto pos = Parks::roadPosition(centre, rotation);
+            auto* entry = World::TileManager::insertElement<World::RoadElement>(pos, 4, 15);
+            auto& r = entry->get<World::RoadElement>();
+            r.setRoadId(0);
+            r.setOwner(CompanyId::neutral);
+            r.setRoadObjectId(0);
+            return r;
+        }
+    };
+}
+
+TEST_F(HybridMapTest, PlacementRequiresGroundRoadInChosenDirectionAndNeverShowsOnWater)
+{
+    EXPECT_FALSE(Parks::quoteSite(centre, 0, 0, objects).valid);
+    auto& road = addRoad(0);
+    EXPECT_TRUE(Parks::quoteSite(centre, 0, 0, objects).valid);
+    for (uint8_t r = 1; r < 4; ++r)
+    {
+        EXPECT_FALSE(Parks::quoteSite(centre, r, 0, objects).valid);
+    }
+    road.setHasBridge(true);
+    EXPECT_FALSE(Parks::quoteSite(centre, 0, 0, objects).valid);
+    road.setHasBridge(false);
+    road.setGhost(true);
+    EXPECT_FALSE(Parks::quoteSite(centre, 0, 0, objects).valid);
+    road.setGhost(false);
+    Parks::movePreview(centre, objects);
     ASSERT_TRUE(Parks::_preview);
-    EXPECT_EQ(Parks::_preview->position, World::Pos2(320, 320));
     EXPECT_TRUE(Parks::_parks.empty());
-    EXPECT_FALSE(Parks::contains({ 320, 320 }));
-    const auto ground = Parks::_preview->groundImage;
-    ASSERT_NE(Rct2Graphics::get(ground), nullptr);
-    EXPECT_EQ(Rct2Graphics::get(ground)->width, 64);
-    EXPECT_EQ(Rct2Graphics::get(ground)->height, 32);
-    ASSERT_NE(Rct2Graphics::get(ground + 1), nullptr);
-    const auto allocated = Rct2Graphics::_images.size();
-    Parks::movePreview({ 640, 640 });
-    EXPECT_EQ(Rct2Graphics::_images.size(), allocated);
-    Parks::clearPreview();
+    EXPECT_FALSE(Parks::contains(centre));
+    auto* surface = World::TileManager::get(centre).surface();
+    surface->setWater(8);
+    Parks::movePreview(centre, objects);
     EXPECT_FALSE(Parks::_preview);
-    Parks::movePreview({ 640, 640 });
+    EXPECT_FALSE(Parks::createPark(centre, objects));
+    EXPECT_TRUE(Parks::_parks.empty());
+    surface->setWater(0);
+    surface->setSlope(World::SurfaceSlope::doubleHeight | 1);
+    EXPECT_FALSE(Parks::quoteSite(centre, 0, 0, objects).valid);
+}
+
+TEST_F(HybridMapTest, ConstructionDebitsQuotedCostOnceAndCreatesTheChosenModel)
+{
+    addRoad(0);
+    const auto quote = Parks::quoteSite(centre, 0, 0, objects);
+    ASSERT_TRUE(quote.valid);
+    const auto cash = CompanyManager::get(CompanyId(0))->cash.asInt64();
+    auto* park = Parks::createPark(centre, objects);
+    ASSERT_NE(park, nullptr);
+    EXPECT_EQ(park->rides.size(), 3u);
+    EXPECT_EQ(park->rotation, 0);
+    EXPECT_EQ(park->model, 0);
+    EXPECT_EQ(CompanyManager::get(CompanyId(0))->cash.asInt64(), cash - quote.total());
+    EXPECT_EQ(Parks::selectedPark(), park);
+    EXPECT_FALSE(Parks::_preview);
+    EXPECT_FALSE(Parks::createPark(centre, objects));
+    EXPECT_EQ(Parks::_parks.size(), 1u);
+    EXPECT_EQ(CompanyManager::get(CompanyId(0))->cash.asInt64(), cash - quote.total());
+}
+
+TEST_F(HybridMapTest, FailedFundingLeavesTerrainAndBalanceUntouched)
+{
+    addRoad(0);
+    auto* s = World::TileManager::get(centre + World::Pos2(32, 0)).surface();
+    s->setSlope(1);
+    auto q = Parks::quoteSite(centre, 0, 0, objects);
+    ASSERT_TRUE(q.valid);
+    EXPECT_GT(q.landscaping, 0);
+    auto* company = CompanyManager::get(CompanyId(0));
+    company->cash = currency48_t(1);
+    EXPECT_FALSE(Parks::createPark(centre, objects));
+    EXPECT_EQ(s->slope(), 1);
+    EXPECT_EQ(company->cash.asInt64(), 1);
+    EXPECT_TRUE(Parks::_parks.empty());
+}
+
+TEST_F(HybridMapTest, ClearingAndLevellingAreQuotedWithoutChangingTheMap)
+{
+    addRoad(0);
+    const auto pos = centre + World::Pos2(32, 0);
+    auto* s = World::TileManager::get(pos).surface();
+    s->setSlope(1);
+    auto* e = World::TileManager::insertElement<World::TreeElement>(pos, 4, 15);
+    e->get<World::TreeElement>().setTreeObjectId(0);
+    const auto q = Parks::quoteSite(centre, 0, 0, objects);
+    ASSERT_TRUE(q.valid);
+    EXPECT_EQ(q.trees, 1u);
+    EXPECT_EQ(q.clearance, 20);
+    EXPECT_EQ(q.landscaping, 10);
+    EXPECT_EQ(World::TileManager::get(pos).size(), 2u);
+    EXPECT_EQ(World::TileManager::get(pos).surface()->slope(), 1);
+}
+
+TEST_F(HybridMapTest, MonthlyChargesUseInflationAndCompanyLedgerExactlyOnce)
+{
+    addRoad(0);
+    auto* p = Parks::createPark(centre, objects);
+    ASSERT_NE(p, nullptr);
+    auto* company = CompanyManager::get(CompanyId(0));
+    const auto cash = company->cash.asInt64();
+    const auto expenses = company->expenditures[0][ExpenditureType::Miscellaneous];
+    Parks::updateMonthly();
+    EXPECT_EQ(company->cash.asInt64(), cash);
+    p->lastChargedMonth = Parks::monthKey() - 1;
+    const auto charge = Parks::monthlyTax(3) + Parks::monthlyUpkeep(3);
+    Parks::updateMonthly();
+    EXPECT_EQ(company->cash.asInt64(), cash - charge);
+    EXPECT_EQ(company->expenditures[0][ExpenditureType::Miscellaneous], expenses - charge);
+    Parks::updateMonthly();
+    EXPECT_EQ(company->cash.asInt64(), cash - charge);
+    getGameState().currencyMultiplicationFactor[8] *= 2;
+    EXPECT_EQ(Parks::monthlyTax(3), 226);
+    EXPECT_GT(Parks::monthlyTax(4), Parks::monthlyTax(3));
+}
+
+TEST_F(HybridMapTest, EveryModelHasRealDefinitionsSmallGatesAndChangingAnimationFrames)
+{
+    for (uint8_t m = 0; m < 3; ++m)
+    {
+        Parks::_model = m;
+        const auto park = Parks::makeModel();
+        ASSERT_EQ(park.rides.size(), 3u);
+        for (int r = 0; r < 4; ++r)
+        {
+            auto* gate = Rct2Graphics::get(park.entranceImage + r);
+            ASSERT_NE(gate, nullptr);
+            EXPECT_LE(gate->width, 60);
+            EXPECT_LE(gate->height, 44);
+        }
+        for (const auto& ride : park.rides)
+        {
+            EXPECT_FALSE(ride.definition->payload.empty());
+            const auto& a = Rct2Graphics::_images[ride.image - Rct2Graphics::kFirstImage]->pixels;
+            const auto& b = Rct2Graphics::_images[ride.image - Rct2Graphics::kFirstImage + 1]->pixels;
+            EXPECT_NE(a, b);
+        }
+    }
     Parks::reset();
-    EXPECT_FALSE(Parks::_preview);
+    EXPECT_TRUE(ParkVisuals::_models.empty());
     EXPECT_FALSE(Parks::_groundImage);
-    EXPECT_EQ(Rct2Graphics::get(ground), nullptr);
 }

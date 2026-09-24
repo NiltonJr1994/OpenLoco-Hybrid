@@ -1,11 +1,13 @@
 #pragma once
 
+#include "Audio/Audio.h"
 #include "Graphics/DrawingContext.h"
 #include "Graphics/ImageIds.h"
 #include "Graphics/TextRenderer.h"
 #include "Hybrid/ParkManager.h"
 #include "Hybrid/Rct2AssetRegistry.h"
 #include "Input.h"
+#include "Localisation/FormatArguments.hpp"
 #include "Localisation/StringIds.h"
 #include "Localisation/StringManager.h"
 #include "Map/MapSelection.h"
@@ -50,8 +52,15 @@ namespace OpenLoco::Hybrid::ParkWindows
 
     static constexpr StringId kStringInstantiate = 2475;
     static constexpr StringId kStringPreviousPark = 2476;
+    static constexpr StringId kStringRotate = 2477;
+    static constexpr StringId kStringModelPrevious = 2478;
+    static constexpr StringId kStringModelNext = 2479;
+    static constexpr StringId kStringPlacementError = 2480;
     inline void installStrings()
     {
+        StringManager::swapString(kStringRotate, "Rotate gate");
+        StringManager::swapString(kStringModelPrevious, "< Park model");
+        StringManager::swapString(kStringModelNext, "Park model >");
         StringManager::swapString(kStringInstantiate, "Add object");
         StringManager::swapString(kStringPreviousPark, "Previous park");
         StringManager::swapString(kStringMenuParks, kMenuParksText);
@@ -65,6 +74,9 @@ namespace OpenLoco::Hybrid::ParkWindows
 
     namespace Widx
     {
+        constexpr WidgetId rotate{ "hybrid_rotate" };
+        constexpr WidgetId modelPrevious{ "hybrid_model_previous" };
+        constexpr WidgetId modelNext{ "hybrid_model_next" };
         constexpr WidgetId instantiate{ "hybrid_instantiate" };
         constexpr WidgetId previousPark{ "hybrid_previous_park" };
         constexpr WidgetId close{ "hybrid_park_close" };
@@ -89,7 +101,7 @@ namespace OpenLoco::Hybrid::ParkWindows
         nextTemplate,
     };
 
-    static constexpr Ui::Size kWindowSize = { 570, 390 };
+    static constexpr Ui::Size kWindowSize = { 570, 418 };
 
     static constexpr auto kWidgets = makeWidgets(
         Widgets::Frame({ 0, 0 }, kWindowSize, WindowColour::primary),
@@ -102,7 +114,10 @@ namespace OpenLoco::Hybrid::ParkWindows
         Widgets::Button(Widx::previousTemplate, { 351, 304 }, { 100, 24 }, WindowColour::secondary, kStringPreviousTemplate),
         Widgets::Button(Widx::nextTemplate, { 459, 304 }, { 100, 24 }, WindowColour::secondary, kStringNextTemplate),
         Widgets::Button(Widx::instantiate, { 12, 338 }, { 160, 24 }, WindowColour::secondary, kStringInstantiate),
-        Widgets::Button(Widx::previousPark, { 184, 338 }, { 160, 24 }, WindowColour::secondary, kStringPreviousPark));
+        Widgets::Button(Widx::previousPark, { 184, 338 }, { 160, 24 }, WindowColour::secondary, kStringPreviousPark),
+        Widgets::Button(Widx::rotate, { 351, 338 }, { 208, 24 }, WindowColour::secondary, kStringRotate),
+        Widgets::Button(Widx::modelPrevious, { 12, 372 }, { 160, 24 }, WindowColour::secondary, kStringModelPrevious),
+        Widgets::Button(Widx::modelNext, { 184, 372 }, { 160, 24 }, WindowColour::secondary, kStringModelNext));
 
     inline Widget* findWidget(Window& window, const WidgetId id)
     {
@@ -116,16 +131,30 @@ namespace OpenLoco::Hybrid::ParkWindows
         return nullptr;
     }
 
-    inline void drawText(const Ui::Window& self, Gfx::TextRenderer& tr, int16_t x, int16_t y, const std::string& text)
+    inline void drawText([[maybe_unused]] const Ui::Window& self, Gfx::TextRenderer& tr, int16_t x, int16_t y, const std::string& text)
     {
-        const auto clipped = text.substr(0, 84);
-        tr.drawString({ static_cast<int16_t>(self.x + x), static_cast<int16_t>(self.y + y) }, Colour::black, clipped.c_str());
+        // WindowManager already pushes a clip whose origin is the window.
+        // FD uses the native black text palette, just like formatted UI strings.
+        char clipped[512]{};
+        const auto length = std::min(text.size(), sizeof(clipped) - 8);
+        std::copy_n(text.data(), length, clipped);
+        Gfx::TextRenderer::clipString(tr.getCurrentFont(), 544, clipped);
+        tr.drawString({ x, y }, AdvancedColour::FD(), clipped);
+    }
+
+    inline std::string money(currency32_t value)
+    {
+        char buffer[128]{};
+        FormatArguments args;
+        args.push(currency48_t(value));
+        StringManager::formatString(buffer, sizeof(buffer), StringIds::currency48, args);
+        return buffer;
     }
 
     inline void clearMapSelection()
     {
         World::mapInvalidateSelectionRect();
-        World::resetMapSelectionFlag(World::MapSelectionFlags::enable);
+        World::resetMapSelectionFlag(World::MapSelectionFlags::enable | World::MapSelectionFlags::enableConstructionArrow);
         World::mapInvalidateSelectionRect();
     }
 
@@ -136,6 +165,16 @@ namespace OpenLoco::Hybrid::ParkWindows
         World::setMapSelectionFlags(World::MapSelectionFlags::enable);
         World::setMapSelectionCorner(MapSelectionType::full);
         World::setMapSelectionArea(minPos, maxPos);
+        const auto gate = Parks::normaliseCentre(position) + Parks::rotate({ 96, 0 }, Parks::_rotation);
+        if (World::validCoords(World::toTileSpace(gate)))
+        {
+            const auto* surface = World::TileManager::get(gate).surface();
+            if (surface)
+            {
+                World::setConstructionArrow({ { gate.x, gate.y, surface->baseHeight() }, static_cast<uint8_t>((Parks::_rotation + 2) & 3) });
+                World::setMapSelectionFlags(World::MapSelectionFlags::enableConstructionArrow);
+            }
+        }
         World::mapInvalidateSelectionRect();
     }
 
@@ -162,7 +201,8 @@ namespace OpenLoco::Hybrid::ParkWindows
         ToolManager::toolSet(self, panel, CursorId::placeTown);
         Input::setFlag(Input::Flags::flag6);
         Ui::Windows::Main::showGridlines();
-        Parks::_lastStatus = "Placement mode: choose a clear 7x7 area within 48 tiles of a town centre.";
+        _insidePark = false;
+        Parks::_lastStatus = "Choose dry land beside a road. Rotate gate to face the road.";
         self.invalidate();
     }
 
@@ -240,6 +280,36 @@ namespace OpenLoco::Hybrid::ParkWindows
             WindowManager::close(&self);
             return;
         }
+        if (id == Widx::rotate || id == Widx::modelPrevious || id == Widx::modelNext)
+        {
+            if (id == Widx::rotate)
+            {
+                Parks::_rotation = (Parks::_rotation + 1) & 3;
+            }
+            else
+            {
+                Parks::_model = (Parks::_model + (id == Widx::modelNext ? 1 : 2)) % Parks::kModels.size();
+            }
+            try
+            {
+                Parks::preparePreview();
+                if (Parks::_hover)
+                {
+                    Parks::movePreview(*Parks::_hover);
+                }
+                else
+                {
+                    Parks::_lastStatus = "Model/orientation selected. Click Build park, then choose land by a road.";
+                }
+            }
+            catch (const std::exception& e)
+            {
+                Parks::clearPreview();
+                Parks::_lastStatus = e.what();
+            }
+            self.invalidate();
+            return;
+        }
         if (id == Widx::instantiate)
         {
             if (_insidePark)
@@ -276,6 +346,7 @@ namespace OpenLoco::Hybrid::ParkWindows
             }
             Parks::clearPreview();
             Parks::_groundImage.reset();
+            ParkVisuals::reset();
             Rct2Graphics::reset();
             Rct2Assets::scan();
             Parks::_lastStatus = Rct2Assets::get().status;
@@ -323,16 +394,21 @@ namespace OpenLoco::Hybrid::ParkWindows
             clearMapSelection();
             return;
         }
-        if (Parks::_preview && Parks::_preview->position == Parks::normaliseCentre(*mapPos))
+        const auto centre = Parks::normaliseCentre(*mapPos);
+        if (Parks::_hover && *Parks::_hover == centre)
         {
             return;
         }
-        Parks::movePreview(*mapPos);
-        selectParkFootprint(*mapPos);
-        std::string reason;
-        Parks::_lastStatus = Parks::validateParkSite(*mapPos, reason)
-            ? "Valid 7x7 site. Click to build for 5,000."
-            : reason;
+        selectParkFootprint(centre);
+        try
+        {
+            Parks::movePreview(centre);
+        }
+        catch (const std::exception& e)
+        {
+            Parks::clearPreview();
+            Parks::_lastStatus = e.what();
+        }
         self.invalidate();
     }
 
@@ -349,8 +425,8 @@ namespace OpenLoco::Hybrid::ParkWindows
         auto* park = Parks::createPark(*mapPos);
         if (park == nullptr)
         {
-            // Keep placement mode active so the player can immediately try a
-            // different site after reading the visible rejection reason.
+            StringManager::swapString(kStringPlacementError, Parks::_lastStatus.c_str());
+            Ui::Windows::Error::open(StringIds::error_cant_build_this_here, kStringPlacementError);
             self.invalidate();
             return;
         }
@@ -360,7 +436,8 @@ namespace OpenLoco::Hybrid::ParkWindows
             ToolManager::toolCancel();
         }
         Ui::Windows::Main::hideGridlines();
-        selectParkFootprint(park->position);
+        clearMapSelection();
+        Audio::playSound(Audio::SoundId::construct, Audio::ChannelId::effects, World::Pos3{ park->position.x, park->position.y, park->height });
         self.invalidate();
     }
 
@@ -370,57 +447,58 @@ namespace OpenLoco::Hybrid::ParkWindows
         auto tr = Gfx::TextRenderer(drawingCtx);
         const auto& assets = Rct2Assets::get();
 
-        drawText(self, tr, 12, 27, "OpenLoco Hybrid v0.5.1-alpha - Native RCT2 assets");
-        drawText(self, tr, 12, 47, std::string("Decoded registry: ") + (assets.ready ? "READY" : "NOT READY"));
-        drawText(self, tr, 12, 64, "Rides/shops: " + std::to_string(assets.rides.size()) + "    Entrances: " + std::to_string(assets.entrances.size()));
-        drawText(self, tr, 12, 81, "Unsupported classes: " + std::to_string(assets.unsupported) + "    Rejected files: " + std::to_string(assets.rejected));
-        if (auto* park = Parks::selectedPark())
+        drawText(self, tr, 12, 27, "OpenLoco Hybrid v0.6.0-alpha - Native RCT2 assets");
+        drawText(self, tr, 12, 45, std::string("RCT2: ") + (assets.ready ? "READY" : "NOT READY") + "  Rides/shops: " + std::to_string(assets.rides.size()) + "  Entrances: " + std::to_string(assets.entrances.size()));
+        const auto* park = Parks::selectedPark();
+        const auto model = _insidePark && park ? park->model : Parks::_model;
+        const auto count = _insidePark && park ? park->rides.size() : 3;
+        drawText(self, tr, 12, 64, std::string("Park model: ") + Parks::kModels[model].name + "  |  7x7 tiles  |  Gate side: " + std::to_string((_insidePark && park ? park->rotation : Parks::_rotation) + 1) + "/4");
+        if (_insidePark && park)
         {
-            drawText(self, tr, 12, 103, "Park #" + std::to_string(park->id) + "    7x7 tiles    Objects: " + std::to_string(park->rides.size()) + "/9");
-            drawText(self, tr, 12, 120, "Entrance: " + park->entrance->name + " [" + park->entrance->id + "]");
-            if (_insidePark)
+            drawText(self, tr, 12, 84, "Park #" + std::to_string(park->id) + "  Objects: " + std::to_string(count) + "/9  |  Paid: " + money(park->paidConstruction));
+        }
+        else
+        {
+            const auto& q = Parks::_quote;
+            drawText(self, tr, 12, 84, "Construction: " + money(Parks::constructionCost(model)) + "  |  Trees: " + money(q.clearance) + "  |  Levelling: " + money(q.landscaping));
+            drawText(self, tr, 12, 101, "Total: " + money(Parks::constructionCost(model) + q.clearance + q.landscaping) + "  |  Trees to remove: " + std::to_string(q.trees));
+        }
+        drawText(self, tr, 12, 121, "Monthly park tax: " + money(Parks::monthlyTax(count)) + "  |  Upkeep: " + money(Parks::monthlyUpkeep(count)));
+        drawText(self, tr, 12, 138, "Monthly total: " + money(Parks::monthlyTax(count) + Parks::monthlyUpkeep(count)) + "  (inflation adjusted; company Miscellaneous expenses)");
+        if (_insidePark && park)
+        {
+            drawText(self, tr, 12, 155, "Last monthly debit: " + money(park->lastTax + park->lastOperatingCost));
+            if (auto ride = Rct2Assets::selectedRide())
             {
-                if (auto ride = Rct2Assets::selectedRide())
+                drawText(self, tr, 12, 179, "Object " + std::to_string(Rct2Assets::_selectedRide + 1) + "/" + std::to_string(assets.rides.size()) + ": " + ride->name);
+                drawText(self, tr, 12, 199, ride->description.substr(0, 63));
+                drawText(self, tr, 12, 219, "Add object increases monthly costs. Animated models are visual proxies.");
+                try
                 {
-                    drawText(self, tr, 12, 146, "Object " + std::to_string(Rct2Assets::_selectedRide + 1) + "/" + std::to_string(assets.rides.size()) + ": " + ride->name.substr(0, 46));
-                    drawText(self, tr, 12, 163, "DAT: " + ride->id + "    RCT2 ride type: " + std::to_string(ride->rideTypes[0]));
-                    drawText(self, tr, 12, 180, ride->description.substr(0, 65));
-                    drawText(self, tr, 12, 197, "Capacity definition: " + ride->capacity.substr(0, 42));
-                    drawText(self, tr, 12, 214, "Decoded definition bytes: " + std::to_string(ride->payload.size()));
-                    try
-                    {
-                        const auto image = Rct2Graphics::load(ride);
-                        drawingCtx.drawImage(ZoomLevel::full, { static_cast<int16_t>(self.x + 495), static_cast<int16_t>(self.y + 190) }, ImageId(image));
-                    }
-                    catch (const std::exception& e)
-                    {
-                        Parks::_lastStatus = e.what();
-                    }
+                    drawingCtx.drawImage(ZoomLevel::full, { 505, 238 }, ImageId(ParkVisuals::thumbnail(ride)));
                 }
-            }
-            else
-            {
-                drawText(self, tr, 12, 146, "Enter park opens the native object browser here.");
-            }
-            if (!park->rides.empty())
-            {
-                drawText(self, tr, 12, 234, "Last instance: " + park->rides.back().definition->name);
+                catch (const std::exception& e)
+                {
+                    Parks::_lastStatus = e.what();
+                }
             }
         }
         else
         {
-            drawText(self, tr, 12, 110, "Build park: select a clear, flat 7x7 site within 48 tiles of a town.");
-            drawText(self, tr, 12, 130, "Construction charge: 5,000. Native object instances are free in this alpha.");
+            drawText(self, tr, 12, 166, "Choose a model below. Rotate gate, then place beside a level road.");
+            drawText(self, tr, 12, 184, "Water and steep hills are blocked. Trees and minor slopes are quoted.");
+            drawText(self, tr, 12, 202, "The miniature appears only at a valid site. Left-click builds the park.");
+            drawText(self, tr, 12, 220, "After building, Enter park opens its objects and cost details.");
         }
         const auto status = "Status: " + Parks::_lastStatus;
-        const auto split = status.size() > 80 ? status.rfind(' ', 80) : std::string::npos;
-        drawText(self, tr, 12, 251, status.substr(0, split));
+        const auto split = status.size() > 78 ? status.rfind(' ', 78) : std::string::npos;
+        drawText(self, tr, 12, 250, status.substr(0, split));
         if (split != std::string::npos)
         {
             drawText(self, tr, 12, 264, status.substr(split + 1));
         }
-        drawText(self, tr, 12, 280, "Session-only: parks are not saved. TD6 and ride simulation are not implemented.");
-        drawText(self, tr, 12, 372, "RCT2 ObjData remains isolated from all Locomotion objects and mods.");
+        drawText(self, tr, 12, 282, "Session-only parks; no saved parks, visitor simulation or TD6 construction.");
+        drawText(self, tr, 12, 402, "RCT2 assets stay separate from Locomotion ObjData.");
     }
 
     inline constexpr WindowEventList kEvents = {

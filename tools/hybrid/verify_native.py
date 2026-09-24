@@ -22,7 +22,7 @@ if len(sys.argv) > 1:
     pe = struct.unpack_from('<I', binary, 0x3c)[0]
     assert binary[pe:pe+4] == b'PE\0\0'
     assert struct.unpack_from('<H', binary, pe+4)[0] == 0x8664, 'Not Windows x64'
-    for marker in (b'Native RCT2 assets', b'Add object', b'v0.5.1-alpha'):
+    for marker in (b'Native RCT2 assets', b'Add object', b'v0.6.0-alpha'):
         assert marker in binary, marker
     for marker in ('rct2-runtime', 'openrct2.exe', '--rct2-data-path'):
         assert marker.encode() not in binary and marker.encode('utf-16le') not in binary, marker
